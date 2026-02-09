@@ -1,0 +1,76 @@
+# DocVision - GPU Dockerfile (CUDA)
+# =================================
+# GPU-accelerated container for document AI processing
+
+FROM nvidia/cuda:11.8-cudnn8-runtime-ubuntu22.04
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    DEBIAN_FRONTEND=noninteractive
+
+# Install Python and system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.10 \
+    python3.10-dev \
+    python3-pip \
+    # OpenCV dependencies
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgomp1 \
+    # Tesseract OCR
+    tesseract-ocr \
+    tesseract-ocr-eng \
+    # PDF processing
+    poppler-utils \
+    # Build essentials
+    gcc \
+    g++ \
+    # Cleanup
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Make python3.10 the default
+RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.10 1 \
+    && update-alternatives --install /usr/bin/pip pip /usr/bin/pip3 1
+
+# Create app user
+RUN useradd -m -u 1000 docvision
+
+# Set working directory
+WORKDIR /app
+
+# Copy requirements first for caching
+COPY requirements.txt requirements-gpu.txt ./
+
+# Install Python dependencies with GPU support
+RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cu118 \
+    && pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY . .
+
+# Install the package
+RUN pip install --no-cache-dir -e .
+
+# Create directories for models, output, artifacts
+RUN mkdir -p /app/models /app/output /app/artifacts \
+    && chown -R docvision:docvision /app
+
+# Switch to non-root user
+USER docvision
+
+# Expose API port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD python -c "import requests; requests.get('http://localhost:8000/health').raise_for_status()" || exit 1
+
+# Default command - run API server
+CMD ["python", "-m", "docvision.api.server"]

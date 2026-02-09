@@ -1,0 +1,88 @@
+# DocVision Accuracy-First Configuration
+# Copy this file to config.yaml and modify as needed
+
+runtime:
+  device: auto          # auto (detect GPU), cuda, or cpu
+  workers: 0            # 0 = auto-detect CPU count
+
+pdf:
+  dpi: 350              # Rasterization DPI (300-400 for accuracy)
+  max_pages: null       # null = process all pages
+
+preprocess:
+  denoise: true         # NLM denoising
+  clahe: true           # Contrast enhancement
+  sharpen: true         # Unsharp masking
+  deskew: true          # Auto-deskew via Hough
+  dewarp: true          # Perspective correction
+
+models:
+  # Layout detection (DocLayNet-trained YOLO)
+  layout: models/yolov8x-doclaynet.pt
+  layout_fallback: yolov8n.pt
+  
+  # Text detection (CRAFT)
+  craft: models/craft_mlt_25k.pth
+  
+  # Table structure (TATR)
+  tatr: models/table-transformer-structure
+  
+  # OCR recognition (TrOCR)
+  trocr_printed: models/trocr-base-printed
+  trocr_handwritten: models/trocr-base-handwritten
+  
+  # KIE models
+  donut: naver-clova-ix/donut-base-finetuned-cord-v2
+  layoutlmv3: microsoft/layoutlmv3-base
+
+kie:
+  use_donut: true
+  use_layoutlmv3: true
+  use_ppstructure: false  # Reserved for future PaddleOCR integration
+  
+  # Ensemble weights
+  donut_weight: 1.0
+  layoutlmv3_weight: 0.9
+  ocr_weight: 0.8
+
+thresholds:
+  trocr_min_conf: 0.75
+  tesseract_min_conf: 0.70
+  reroute_to_tesseract_below: 0.80
+  handwriting_detection_conf: 0.6
+  low_confidence_threshold: 0.5
+  min_confidence_for_output: 0.2
+
+validators:
+  enable: true
+  currency_codes:
+    - USD
+    - EUR
+    - GBP
+    - CAD
+    - AUD
+    - JPY
+    - INR
+  amount_tolerance: 0.01
+  date_formats:
+    - "%Y-%m-%d"
+    - "%d/%m/%Y"
+    - "%m/%d/%Y"
+    - "%d-%m-%Y"
+    - "%B %d, %Y"
+    - "%b %d, %Y"
+
+artifacts:
+  enable: true
+  dir: artifacts
+  save_layout_overlay: true
+  save_text_polygons: true
+  save_table_structure: true
+  save_ocr_overlay: true
+  save_preprocessed: true
+
+output:
+  dir: output
+  include_all_candidates: true
+  include_page_images: false
+  pretty_json: true

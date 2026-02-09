@@ -1,0 +1,53 @@
+# DocVision Core Dependencies
+# ===========================
+
+# Core ML/DL
+torch>=2.0.0
+torchvision>=0.15.0
+transformers>=4.30.0
+timm>=0.9.0
+
+# Computer Vision (use headless for server environments, opencv-python for desktop)
+# Only install ONE of these - headless is recommended for servers
+opencv-python-headless>=4.8.0
+Pillow>=10.0.0
+
+# PDF Processing
+PyMuPDF>=1.23.0
+
+# Data Validation
+pydantic>=2.0.0
+
+# API Framework
+fastapi>=0.100.0
+uvicorn[standard]>=0.23.0
+python-multipart>=0.0.6
+
+# CLI Framework
+typer>=0.9.0
+rich>=13.0.0
+
+# Configuration
+PyYAML>=6.0
+
+# Logging
+loguru>=0.7.0
+
+# Utilities
+numpy>=1.24.0,<2.0.0
+scipy>=1.11.0
+tqdm>=4.65.0
+
+# OCR Backup (optional, requires system Tesseract binary)
+pytesseract>=0.3.10
+
+# YOLO for Layout Detection
+ultralytics>=8.0.0
+
+# Testing (dev dependency)
+pytest>=7.0.0
+pytest-cov>=4.0.0
+httpx>=0.24.0
+
+# HTTP Client (for health checks)
+requests>=2.31.0

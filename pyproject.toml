@@ -1,0 +1,101 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "docvision"
+version = "0.1.0"
+description = "Accuracy-first document AI system for extracting structured data from documents"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "DocVision Team"}
+]
+keywords = [
+    "document-ai",
+    "ocr",
+    "document-understanding",
+    "information-extraction",
+    "pdf-processing",
+    "invoice-processing",
+    "table-extraction"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Image Recognition",
+]
+dependencies = [
+    "torch>=2.0.0",
+    "torchvision>=0.15.0",
+    "transformers>=4.30.0",
+    "timm>=0.9.0",
+    "opencv-python>=4.8.0",
+    "Pillow>=10.0.0",
+    "PyMuPDF>=1.23.0",
+    "pydantic>=2.0.0",
+    "fastapi>=0.100.0",
+    "uvicorn[standard]>=0.23.0",
+    "python-multipart>=0.0.6",
+    "typer>=0.9.0",
+    "rich>=13.0.0",
+    "PyYAML>=6.0",
+    "loguru>=0.7.0",
+    "numpy>=1.24.0",
+    "scipy>=1.11.0",
+    "tqdm>=4.65.0",
+    "ultralytics>=8.0.0",
+    "requests>=2.31.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "httpx>=0.24.0",
+    "black>=23.0.0",
+    "ruff>=0.0.270",
+    "mypy>=1.0.0",
+]
+tesseract = [
+    "pytesseract>=0.3.10",
+]
+
+[project.scripts]
+docvision = "docvision.cli.main:main_entry"
+
+[project.urls]
+Homepage = "https://github.com/example/docvision"
+Documentation = "https://github.com/example/docvision#readme"
+Repository = "https://github.com/example/docvision"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["docvision*"]
+
+[tool.black]
+line-length = 100
+target-version = ['py310']
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "W", "I", "N", "UP", "B"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v --tb=short"

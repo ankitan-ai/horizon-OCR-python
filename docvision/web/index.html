@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DocVision — Document Scanner</title>
+<style>
+/* ── Reset & Base ───────────────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f1117;--surface:#1a1d27;--surface2:#242836;--surface3:#2e3345;
+  --border:#363b4e;--text:#e4e6f0;--muted:#8890a4;
+  --primary:#6366f1;--primary-hover:#818cf8;--primary-bg:rgba(99,102,241,.12);
+  --success:#22c55e;--warning:#f59e0b;--error:#ef4444;
+  --radius:10px;--shadow:0 4px 24px rgba(0,0,0,.35);
+  --font:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  --mono:'Cascadia Code','Fira Code','JetBrains Mono',monospace;
+}
+html{font-size:15px}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh}
+a{color:var(--primary);text-decoration:none}
+
+/* ── Layout ─────────────────────────────────────────────────────── */
+.app{max-width:1320px;margin:0 auto;padding:20px 28px 60px}
+header{display:flex;align-items:center;gap:14px;padding:18px 0 28px;border-bottom:1px solid var(--border)}
+header h1{font-size:1.55rem;font-weight:700;letter-spacing:-.3px}
+header h1 span{color:var(--primary)}
+header .version{font-size:.78rem;color:var(--muted);margin-left:auto}
+
+/* ── Tabs ───────────────────────────────────────────────────────── */
+.tabs{display:flex;gap:6px;margin:24px 0 20px;border-bottom:2px solid var(--border);padding-bottom:0}
+.tab{padding:10px 22px;cursor:pointer;font-size:.9rem;font-weight:500;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;transition:.2s;user-select:none;border-radius:var(--radius) var(--radius) 0 0}
+.tab:hover{color:var(--text);background:var(--surface)}
+.tab.active{color:var(--primary);border-bottom-color:var(--primary);background:var(--surface)}
+.panel{display:none}
+.panel.active{display:block}
+
+/* ── Upload Panel ───────────────────────────────────────────────── */
+.drop-zone{
+  border:2px dashed var(--border);border-radius:var(--radius);padding:56px 28px;
+  text-align:center;cursor:pointer;transition:.3s;position:relative;
+  background:var(--surface)
+}
+.drop-zone:hover,.drop-zone.dragover{border-color:var(--primary);background:var(--primary-bg)}
+.drop-zone .icon{font-size:3rem;margin-bottom:14px;opacity:.6}
+.drop-zone p{color:var(--muted);margin-top:6px;font-size:.88rem}
+.drop-zone input{position:absolute;inset:0;opacity:0;cursor:pointer}
+
+/* ── Options Grid ──────────────────────────────────────────────── */
+.options{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;margin:20px 0}
+.opt{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--surface);border-radius:var(--radius);font-size:.85rem}
+.opt input[type=checkbox]{accent-color:var(--primary);width:16px;height:16px}
+
+/* ── Buttons ────────────────────────────────────────────────────── */
+.btn{
+  display:inline-flex;align-items:center;gap:8px;padding:10px 24px;
+  border:none;border-radius:var(--radius);font-size:.9rem;font-weight:600;
+  cursor:pointer;transition:.2s
+}
+.btn-primary{background:var(--primary);color:#fff}
+.btn-primary:hover{background:var(--primary-hover)}
+.btn-primary:disabled{opacity:.45;cursor:not-allowed}
+.btn-secondary{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
+.btn-secondary:hover{background:var(--surface3)}
+.btn-success{background:var(--success);color:#fff}
+.btn-sm{padding:6px 14px;font-size:.82rem}
+
+/* ── Progress / Status ─────────────────────────────────────────── */
+.status-bar{margin:20px 0;padding:16px 20px;border-radius:var(--radius);background:var(--surface);display:none;align-items:center;gap:14px}
+.status-bar.show{display:flex}
+.spinner{width:22px;height:22px;border:3px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.status-text{flex:1;font-size:.9rem}
+.status-time{font-size:.8rem;color:var(--muted);font-family:var(--mono)}
+
+/* ── Artifact Grid ─────────────────────────────────────────────── */
+.artifacts-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:18px;margin-top:16px}
+.artifact-card{background:var(--surface);border-radius:var(--radius);overflow:hidden;border:1px solid var(--border);transition:.2s}
+.artifact-card:hover{border-color:var(--primary);box-shadow:var(--shadow)}
+.artifact-card img{width:100%;display:block;cursor:pointer;background:#000}
+.artifact-card .label{padding:10px 14px;font-size:.82rem;color:var(--muted);display:flex;justify-content:space-between}
+
+/* ── Lightbox ──────────────────────────────────────────────────── */
+.lightbox{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:999;display:none;justify-content:center;align-items:center;cursor:zoom-out}
+.lightbox.show{display:flex}
+.lightbox img{max-width:94vw;max-height:92vh;border-radius:6px;box-shadow:0 8px 40px rgba(0,0,0,.5)}
+
+/* ── JSON Editor ───────────────────────────────────────────────── */
+.editor-toolbar{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center}
+.editor-toolbar .search-box{flex:1;min-width:200px;padding:8px 14px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:.88rem;font-family:var(--mono)}
+.json-editor{
+  width:100%;min-height:520px;padding:18px;border-radius:var(--radius);
+  border:1px solid var(--border);background:var(--surface);color:var(--text);
+  font-family:var(--mono);font-size:.82rem;line-height:1.55;resize:vertical;
+  tab-size:2;white-space:pre;overflow:auto
+}
+.json-editor:focus{outline:none;border-color:var(--primary)}
+.json-status{font-size:.8rem;margin-top:8px}
+.json-status.valid{color:var(--success)}
+.json-status.invalid{color:var(--error)}
+
+/* ── Stats Row ─────────────────────────────────────────────────── */
+.stats{display:flex;gap:14px;flex-wrap:wrap;margin:16px 0}
+.stat{background:var(--surface);border-radius:var(--radius);padding:14px 20px;min-width:130px;border:1px solid var(--border)}
+.stat .value{font-size:1.5rem;font-weight:700;color:var(--primary)}
+.stat .label{font-size:.78rem;color:var(--muted);margin-top:2px}
+
+/* ── Empty State ───────────────────────────────────────────────── */
+.empty{text-align:center;padding:60px 20px;color:var(--muted)}
+.empty .icon{font-size:3rem;margin-bottom:12px;opacity:.4}
+
+/* ── Responsive ────────────────────────────────────────────────── */
+@media(max-width:640px){
+  .app{padding:12px 14px 40px}
+  .artifacts-grid{grid-template-columns:1fr}
+  .options{grid-template-columns:1fr 1fr}
+  .tabs{overflow-x:auto}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- Header -->
+  <header>
+    <h1>📄 Doc<span>Vision</span></h1>
+    <span class="version" id="versionBadge">loading…</span>
+  </header>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <div class="tab active" data-tab="upload">⬆ Upload &amp; Scan</div>
+    <div class="tab" data-tab="artifacts">🔍 Artifacts</div>
+    <div class="tab" data-tab="output">📝 JSON Output</div>
+  </div>
+
+  <!-- ─── UPLOAD PANEL ──────────────────────────────────────────── -->
+  <div class="panel active" id="panel-upload">
+    <div class="drop-zone" id="dropZone">
+      <input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png,.tiff,.tif,.bmp,.webp">
+      <div class="icon">📁</div>
+      <div><strong>Drop a document here</strong> or click to browse</div>
+      <p>PDF · JPEG · PNG · TIFF · BMP · WebP</p>
+    </div>
+
+    <div id="fileInfo" style="margin:14px 0;font-size:.9rem;display:none"></div>
+
+    <details style="margin-top:16px">
+      <summary style="cursor:pointer;color:var(--muted);font-size:.88rem">⚙ Processing Options</summary>
+      <div class="options" id="optionsGrid">
+        <label class="opt"><input type="checkbox" name="preprocess" checked> Preprocess</label>
+        <label class="opt"><input type="checkbox" name="detect_layout" checked> Layout Detection</label>
+        <label class="opt"><input type="checkbox" name="detect_text" checked> Text Detection</label>
+        <label class="opt"><input type="checkbox" name="detect_tables" checked> Table Detection</label>
+        <label class="opt"><input type="checkbox" name="run_ocr" checked> OCR Recognition</label>
+        <label class="opt"><input type="checkbox" name="run_donut"> Donut KIE</label>
+        <label class="opt"><input type="checkbox" name="run_layoutlmv3"> LayoutLMv3 KIE</label>
+        <label class="opt"><input type="checkbox" name="run_validators" checked> Validators</label>
+      </div>
+    </details>
+
+    <div style="margin-top:20px">
+      <button class="btn btn-primary" id="btnProcess" disabled>🚀 Process Document</button>
+    </div>
+
+    <div class="status-bar" id="statusBar">
+      <div class="spinner"></div>
+      <div class="status-text" id="statusText">Processing…</div>
+      <div class="status-time" id="statusTime">0s</div>
+    </div>
+  </div>
+
+  <!-- ─── ARTIFACTS PANEL ───────────────────────────────────────── -->
+  <div class="panel" id="panel-artifacts">
+    <div id="artifactsContent">
+      <div class="empty"><div class="icon">🔍</div><p>Upload and process a document first</p></div>
+    </div>
+  </div>
+
+  <!-- ─── JSON OUTPUT PANEL ─────────────────────────────────────── -->
+  <div class="panel" id="panel-output">
+    <div id="outputContent">
+      <div class="empty"><div class="icon">📝</div><p>Upload and process a document first</p></div>
+    </div>
+  </div>
+</div>
+
+<!-- Lightbox -->
+<div class="lightbox" id="lightbox">
+  <img id="lightboxImg" src="">
+</div>
+
+<script>
+// ─── State ────────────────────────────────────────────────────────
+let currentJobId = null;
+let currentResult = null;
+let selectedFile = null;
+let pollTimer = null;
+let processStart = 0;
+
+// ─── DOM refs ─────────────────────────────────────────────────────
+const $ = s => document.querySelector(s);
+const $$ = s => document.querySelectorAll(s);
+const dropZone      = $('#dropZone');
+const fileInput     = $('#fileInput');
+const fileInfo      = $('#fileInfo');
+const btnProcess    = $('#btnProcess');
+const statusBar     = $('#statusBar');
+const statusText    = $('#statusText');
+const statusTime    = $('#statusTime');
+const lightbox      = $('#lightbox');
+const lightboxImg   = $('#lightboxImg');
+
+// ─── Version badge ────────────────────────────────────────────────
+fetch('/api/jobs/_').catch(()=>{});
+$('#versionBadge').textContent = 'DocVision Web UI';
+
+// ─── Tabs ─────────────────────────────────────────────────────────
+$$('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    $$('.tab').forEach(t => t.classList.remove('active'));
+    $$('.panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    $(`#panel-${tab.dataset.tab}`).classList.add('active');
+  });
+});
+
+// ─── File Selection ───────────────────────────────────────────────
+fileInput.addEventListener('change', e => {
+  if (e.target.files.length) pickFile(e.target.files[0]);
+});
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('dragover');
+  if (e.dataTransfer.files.length) pickFile(e.dataTransfer.files[0]);
+});
+
+function pickFile(f) {
+  selectedFile = f;
+  const sizeMB = (f.size / 1024 / 1024).toFixed(2);
+  fileInfo.innerHTML = `<strong>📎 ${f.name}</strong> &nbsp;(${sizeMB} MB)`;
+  fileInfo.style.display = 'block';
+  btnProcess.disabled = false;
+}
+
+// ─── Processing ───────────────────────────────────────────────────
+btnProcess.addEventListener('click', async () => {
+  if (!selectedFile) return;
+
+  // Collect options
+  const form = new FormData();
+  form.append('file', selectedFile);
+  $$('#optionsGrid input[type=checkbox]').forEach(cb => {
+    form.append(cb.name, cb.checked ? 'true' : 'false');
+  });
+
+  btnProcess.disabled = true;
+  statusBar.classList.add('show');
+  statusText.textContent = 'Uploading & starting processing…';
+  processStart = Date.now();
+  updateTimer();
+
+  try {
+    const res = await fetch('/api/process', { method: 'POST', body: form });
+    if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
+    const data = await res.json();
+    currentJobId = data.job_id;
+    statusText.textContent = 'Processing document… This may take a few minutes.';
+    pollStatus();
+  } catch (err) {
+    statusText.textContent = `❌ Error: ${err.message}`;
+    btnProcess.disabled = false;
+  }
+});
+
+function updateTimer() {
+  if (!statusBar.classList.contains('show')) return;
+  const elapsed = ((Date.now() - processStart) / 1000).toFixed(0);
+  statusTime.textContent = `${elapsed}s`;
+  requestAnimationFrame(() => setTimeout(updateTimer, 500));
+}
+
+async function pollStatus() {
+  try {
+    const res = await fetch(`/api/jobs/${currentJobId}`);
+    const job = await res.json();
+
+    if (job.status === 'completed') {
+      statusText.textContent = '✅ Processing complete!';
+      setTimeout(() => statusBar.classList.remove('show'), 3000);
+      btnProcess.disabled = false;
+      await loadResult();
+      await loadArtifacts();
+      // Auto-switch to artifacts tab
+      $$('.tab')[1].click();
+    } else if (job.status === 'failed') {
+      statusText.textContent = `❌ Failed: ${job.error}`;
+      btnProcess.disabled = false;
+    } else {
+      setTimeout(pollStatus, 1500);
+    }
+  } catch {
+    setTimeout(pollStatus, 2000);
+  }
+}
+
+// ─── Load Result ──────────────────────────────────────────────────
+async function loadResult() {
+  const res = await fetch(`/api/jobs/${currentJobId}/result`);
+  currentResult = await res.json();
+  renderOutput();
+}
+
+// ─── Load Artifacts ───────────────────────────────────────────────
+async function loadArtifacts() {
+  const res = await fetch(`/api/jobs/${currentJobId}/artifacts`);
+  const data = await res.json();
+  renderArtifacts(data.artifacts);
+}
+
+// ─── Render Artifacts ─────────────────────────────────────────────
+function renderArtifacts(artifacts) {
+  const el = $('#artifactsContent');
+  if (!artifacts.length) {
+    el.innerHTML = '<div class="empty"><div class="icon">🔍</div><p>No artifacts generated</p></div>';
+    return;
+  }
+
+  // Group by page
+  const pages = {};
+  artifacts.forEach(a => {
+    const m = a.name.match(/page_(\d+)/);
+    const pageNum = m ? parseInt(m[1]) : 0;
+    if (!pages[pageNum]) pages[pageNum] = [];
+    pages[pageNum].push(a);
+  });
+
+  let html = '';
+  if (currentResult) {
+    html += '<div class="stats">';
+    html += stat('Pages', currentResult.page_count || 0);
+    html += stat('Text Lines', countLines());
+    html += stat('Tables', (currentResult.tables || []).length);
+    html += stat('Fields', (currentResult.fields || []).length);
+    html += stat('Time', (currentResult.metadata?.processing_time_seconds || 0).toFixed(1) + 's');
+    html += '</div>';
+  }
+
+  for (const [pageNum, arts] of Object.entries(pages)) {
+    html += `<h3 style="margin:20px 0 10px;color:var(--muted)">Page ${pageNum}</h3>`;
+    html += '<div class="artifacts-grid">';
+    for (const a of arts) {
+      const friendlyName = a.name.replace(/page_\d+_/, '').replace(/_/g, ' ');
+      html += `
+        <div class="artifact-card">
+          <img src="${a.url}" alt="${a.name}" onclick="showLightbox('${a.url}')" loading="lazy">
+          <div class="label">
+            <span>${friendlyName}</span>
+            <span>${a.size_kb} KB</span>
+          </div>
+        </div>`;
+    }
+    html += '</div>';
+  }
+  el.innerHTML = html;
+}
+
+function stat(label, value) {
+  return `<div class="stat"><div class="value">${value}</div><div class="label">${label}</div></div>`;
+}
+function countLines() {
+  if (!currentResult?.pages) return 0;
+  return currentResult.pages.reduce((s,p) => s + (p.text_lines?.length || 0), 0);
+}
+
+// ─── Render JSON Output ───────────────────────────────────────────
+function renderOutput() {
+  const el = $('#outputContent');
+  const jsonStr = JSON.stringify(currentResult, null, 2);
+
+  el.innerHTML = `
+    <div class="editor-toolbar">
+      <input class="search-box" id="jsonSearch" placeholder="🔍 Search in JSON…" oninput="highlightJson()">
+      <button class="btn btn-secondary btn-sm" onclick="formatJson()">Format</button>
+      <button class="btn btn-secondary btn-sm" onclick="collapseJson()">Collapse</button>
+      <button class="btn btn-success btn-sm" onclick="saveEdits()">💾 Save Edits</button>
+      <button class="btn btn-secondary btn-sm" onclick="downloadJson()">⬇ Download</button>
+    </div>
+    <textarea class="json-editor" id="jsonEditor" spellcheck="false">${escHtml(jsonStr)}</textarea>
+    <div class="json-status" id="jsonStatus"></div>
+  `;
+
+  // Validate on input
+  $('#jsonEditor').addEventListener('input', validateJson);
+  validateJson();
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function validateJson() {
+  const editor = $('#jsonEditor');
+  const status = $('#jsonStatus');
+  try {
+    JSON.parse(editor.value);
+    status.textContent = '✓ Valid JSON';
+    status.className = 'json-status valid';
+  } catch(e) {
+    status.textContent = '✗ ' + e.message;
+    status.className = 'json-status invalid';
+  }
+}
+
+function formatJson() {
+  const editor = $('#jsonEditor');
+  try {
+    const obj = JSON.parse(editor.value);
+    editor.value = JSON.stringify(obj, null, 2);
+    validateJson();
+  } catch {}
+}
+
+function collapseJson() {
+  const editor = $('#jsonEditor');
+  try {
+    const obj = JSON.parse(editor.value);
+    editor.value = JSON.stringify(obj);
+    validateJson();
+  } catch {}
+}
+
+async function saveEdits() {
+  const editor = $('#jsonEditor');
+  try {
+    const obj = JSON.parse(editor.value);
+    const res = await fetch(`/api/jobs/${currentJobId}/result`, {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(obj)
+    });
+    if (res.ok) {
+      currentResult = obj;
+      const status = $('#jsonStatus');
+      status.textContent = '✓ Saved successfully';
+      status.className = 'json-status valid';
+    }
+  } catch(e) {
+    alert('Fix JSON errors before saving');
+  }
+}
+
+function downloadJson() {
+  const editor = $('#jsonEditor');
+  try {
+    const obj = JSON.parse(editor.value);
+    const blob = new Blob([JSON.stringify(obj, null, 2)], {type: 'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = (currentResult?.metadata?.filename || 'document').replace(/\.[^.]+$/, '') + '_result.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch {
+    alert('Fix JSON errors before downloading');
+  }
+}
+
+function highlightJson() {
+  // Simple scroll-to for search
+  const term = $('#jsonSearch').value;
+  if (!term) return;
+  const editor = $('#jsonEditor');
+  const idx = editor.value.toLowerCase().indexOf(term.toLowerCase());
+  if (idx !== -1) {
+    editor.focus();
+    editor.setSelectionRange(idx, idx + term.length);
+    // Scroll to selection
+    const linesBefore = editor.value.substring(0, idx).split('\n').length;
+    editor.scrollTop = linesBefore * 18 - 100;
+  }
+}
+
+// ─── Lightbox ─────────────────────────────────────────────────────
+function showLightbox(url) {
+  lightboxImg.src = url;
+  lightbox.classList.add('show');
+}
+lightbox.addEventListener('click', () => lightbox.classList.remove('show'));
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') lightbox.classList.remove('show');
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+# GPU-specific requirements for DocVision
+# =======================================
+# Install these in addition to requirements.txt for GPU support
+
+# PyTorch with CUDA (uncomment the appropriate version)
+# For CUDA 11.8:
+--extra-index-url https://download.pytorch.org/whl/cu118
+torch>=2.0.0
+torchvision>=0.15.0
+
+# For CUDA 12.1:
+# --extra-index-url https://download.pytorch.org/whl/cu121
+# torch>=2.0.0
+# torchvision>=0.15.0
+
+# Optional: cuDNN optimization
+# nvidia-cudnn-cu11>=8.6.0
+
+# Optional: TensorRT for faster inference
+# tensorrt>=8.6.0

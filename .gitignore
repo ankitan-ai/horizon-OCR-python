@@ -1,0 +1,87 @@
+# Patterns and files to ignore
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Type checking
+.mypy_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Data and outputs (user-specific)
+data/
+output/
+artifacts/
+*.pdf
+*.jpg
+*.jpeg
+*.png
+*.tiff
+*.tif
+
+# Models (large files)
+models/
+*.pt
+*.pth
+*.onnx
+*.bin
+*.safetensors
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Secrets
+.env
+.env.*
+secrets/
+*.key
+*.pem
+
+# Build artifacts
+*.whl
