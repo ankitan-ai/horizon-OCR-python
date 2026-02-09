@@ -167,6 +167,8 @@ async def version_info():
 @app.post("/process", tags=["Processing"])
 async def process_document(
     file: UploadFile = File(..., description="PDF or image file to process"),
+    processing_mode: str = Query("local", description="Processing mode: local, azure, or hybrid"),
+    document_type: str = Query("auto", description="Document type: auto, bol, invoice, receipt, delivery_ticket"),
     preprocess: bool = Query(True, description="Run preprocessing"),
     detect_layout: bool = Query(True, description="Detect layout regions"),
     detect_text: bool = Query(True, description="Detect text regions"),
@@ -211,6 +213,8 @@ async def process_document(
         
         # Create processing options
         options = ProcessingOptions(
+            processing_mode=processing_mode,
+            document_type=document_type,
             preprocess=preprocess,
             detect_layout=detect_layout,
             detect_text=detect_text,

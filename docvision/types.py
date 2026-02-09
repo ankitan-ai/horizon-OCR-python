@@ -103,6 +103,8 @@ class SourceEngine(str, Enum):
     PPSTRUCTURE = "ppstructure"
     ENSEMBLE = "ensemble"
     VALIDATOR = "validator"
+    AZURE_DOC_INTELLIGENCE = "azure_doc_intelligence"
+    GPT_VISION = "gpt_vision"
 
 
 class Word(BaseModel):

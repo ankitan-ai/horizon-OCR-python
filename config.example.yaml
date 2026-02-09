@@ -86,3 +86,28 @@ output:
   include_all_candidates: true
   include_page_images: false
   pretty_json: true
+
+# ─── Azure AI Foundry (Cloud API) ───────────────────────────────────────────
+# Set processing_mode to "azure" or "hybrid" to use cloud APIs instead of
+# (or alongside) local models.  Keys can also be set via environment variables:
+#   AZURE_DOC_INTELLIGENCE_ENDPOINT, AZURE_DOC_INTELLIGENCE_KEY,
+#   AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_KEY
+azure:
+  processing_mode: local        # local | azure | hybrid
+
+  # Azure Document Intelligence (replaces YOLO + CRAFT + TrOCR + TATR + Tesseract)
+  doc_intelligence_endpoint: ""  # https://<resource>.cognitiveservices.azure.com/
+  doc_intelligence_key: ""       # or set AZURE_DOC_INTELLIGENCE_KEY env var
+  doc_intelligence_model: prebuilt-layout  # prebuilt-layout | prebuilt-read | prebuilt-invoice
+
+  # Azure OpenAI / GPT-4o Vision (replaces Donut + LayoutLMv3 KIE)
+  openai_endpoint: ""            # https://<resource>.openai.azure.com/
+  openai_key: ""                 # or set AZURE_OPENAI_KEY env var
+  openai_deployment: gpt-4o     # your deployment name
+  openai_api_version: "2024-12-01-preview"
+  use_gpt_vision_kie: true       # use GPT-4o for key information extraction
+
+  # Extraction settings
+  gpt_max_tokens: 4096
+  gpt_temperature: 0.0           # deterministic for extraction tasks
+  document_type: auto             # auto | bol | invoice | receipt | delivery_ticket

@@ -36,7 +36,10 @@ from docvision.types import (
 @dataclass
 class ProcessingOptions:
     """Options for document processing."""
-    # Processing stages
+    # Processing mode: "local", "azure", or "hybrid"
+    processing_mode: str = "local"
+
+    # Processing stages (used in local/hybrid mode)
     preprocess: bool = True
     detect_layout: bool = True
     detect_text: bool = True
@@ -45,7 +48,11 @@ class ProcessingOptions:
     run_donut: bool = True
     run_layoutlmv3: bool = True
     run_validators: bool = True
-    
+
+    # Azure-specific options (used in azure/hybrid mode)
+    use_gpt_vision_kie: bool = True  # Use GPT-4o for field extraction
+    document_type: str = "auto"      # auto, bol, invoice, receipt, delivery_ticket
+
     # Output options
     save_artifacts: bool = True
     save_json: bool = True
@@ -82,6 +89,10 @@ class DocumentProcessor:
         self._donut = None
         self._layoutlmv3 = None
         self._fuser = None
+
+        # Azure cloud providers (lazy)
+        self._azure_di_provider = None
+        self._gpt_vision_extractor = None
         
         logger.info(f"DocumentProcessor initialized with device: {self.device}")
     
@@ -204,6 +215,7 @@ class DocumentProcessor:
         """Lazy load rank-and-fuse engine."""
         if self._fuser is None:
             from docvision.kie.fuse import RankAndFuse, FusionStrategy
+            from docvision.types import SourceEngine
             self._fuser = RankAndFuse(
                 strategy=FusionStrategy.WEIGHTED_VOTE,
                 source_weights={
@@ -211,9 +223,27 @@ class DocumentProcessor:
                     "layoutlmv3": self.config.kie.layoutlmv3_weight,
                     "trocr": self.config.kie.ocr_weight,
                     "tesseract": self.config.kie.ocr_weight * 0.9,
+                    SourceEngine.GPT_VISION: 1.2,
+                    SourceEngine.AZURE_DOC_INTELLIGENCE: 1.0,
                 }
             )
         return self._fuser
+
+    @property
+    def azure_di_provider(self):
+        """Lazy load Azure Document Intelligence provider."""
+        if self._azure_di_provider is None:
+            from docvision.azure.doc_intelligence import AzureDocIntelligenceProvider
+            self._azure_di_provider = AzureDocIntelligenceProvider(self.config.azure)
+        return self._azure_di_provider
+
+    @property
+    def gpt_vision_extractor(self):
+        """Lazy load GPT Vision KIE extractor."""
+        if self._gpt_vision_extractor is None:
+            from docvision.azure.gpt_vision_kie import GPTVisionExtractor
+            self._gpt_vision_extractor = GPTVisionExtractor(self.config.azure)
+        return self._gpt_vision_extractor
     
     def process(
         self,
@@ -347,6 +377,10 @@ class DocumentProcessor:
         options: ProcessingOptions
     ) -> Dict[str, Any]:
         """Process a single page."""
+        # Route to Azure cloud pipeline when mode is "azure"
+        if options.processing_mode == "azure":
+            return self._process_page_azure(image, page_num, doc_id, options)
+
         h, w = image.shape[:2]
         
         # Preprocessing
@@ -479,6 +513,58 @@ class DocumentProcessor:
             "fields": fields
         }
     
+    def _process_page_azure(
+        self,
+        image: np.ndarray,
+        page_num: int,
+        doc_id: str,
+        options: ProcessingOptions,
+    ) -> Dict[str, Any]:
+        """Process a single page using Azure cloud APIs."""
+        h, w = image.shape[:2]
+        logger.info(f"Processing page {page_num} via Azure cloud pipeline")
+
+        # ── Azure Document Intelligence (OCR + layout + tables) ─────
+        azure_result = self.azure_di_provider.analyze(image, page_num=page_num)
+
+        text_lines = azure_result["text_lines"]
+        tables = azure_result["tables"]
+        layout_regions = azure_result["layout_regions"]
+        raw_text = azure_result["raw_text"]
+
+        # ── GPT Vision KIE (field extraction) ───────────────────────
+        fields = []
+        if options.use_gpt_vision_kie and self.config.azure.is_openai_ready:
+            fields = self.gpt_vision_extractor.extract(
+                image,
+                page_num=page_num,
+                ocr_text=raw_text,
+                document_type=options.document_type,
+            )
+
+        # ── Build page object ───────────────────────────────────────
+        page = Page(
+            number=page_num,
+            metadata=PageMetadata(
+                width=w,
+                height=h,
+                dpi=self.config.pdf.dpi,
+                content_type=ContentType.UNKNOWN,
+                readability="good",
+                readability_issues=[],
+            ),
+            layout_regions=layout_regions,
+            text_lines=text_lines,
+            tables=tables,
+            raw_text=raw_text,
+        )
+
+        return {
+            "page": page,
+            "tables": tables,
+            "fields": fields,
+        }
+
     def _recognize_table_cells(
         self,
         image: np.ndarray,

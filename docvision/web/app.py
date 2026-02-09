@@ -102,6 +102,8 @@ async def index():
 @app.post("/api/process")
 async def process_document(
     file: UploadFile = File(...),
+    processing_mode: str = Form("local"),
+    document_type: str = Form("auto"),
     preprocess: bool = Form(True),
     detect_layout: bool = Form(True),
     detect_text: bool = Form(True),
@@ -141,6 +143,8 @@ async def process_document(
     async def _run():
         try:
             opts = ProcessingOptions(
+                processing_mode=processing_mode,
+                document_type=document_type,
                 preprocess=preprocess,
                 detect_layout=detect_layout,
                 detect_text=detect_text,

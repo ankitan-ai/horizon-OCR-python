@@ -50,6 +50,18 @@ header .version{font-size:.78rem;color:var(--muted);margin-left:auto}
 .options{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;margin:20px 0}
 .opt{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--surface);border-radius:var(--radius);font-size:.85rem}
 .opt input[type=checkbox]{accent-color:var(--primary);width:16px;height:16px}
+.mode-row{display:flex;gap:14px;margin:18px 0 10px;flex-wrap:wrap;align-items:center}
+.mode-row label{font-size:.88rem;color:var(--muted);font-weight:500}
+.mode-row select{
+  padding:8px 14px;border-radius:var(--radius);border:1px solid var(--border);
+  background:var(--surface);color:var(--text);font-size:.88rem;cursor:pointer;
+  min-width:180px
+}
+.mode-row select:focus{outline:none;border-color:var(--primary)}
+.mode-badge{font-size:.72rem;padding:3px 10px;border-radius:20px;font-weight:600;letter-spacing:.3px}
+.mode-badge.local{background:rgba(99,102,241,.15);color:var(--primary)}
+.mode-badge.azure{background:rgba(34,197,94,.15);color:var(--success)}
+.mode-badge.hybrid{background:rgba(245,158,11,.15);color:var(--warning)}
 
 /* ── Buttons ────────────────────────────────────────────────────── */
 .btn{
@@ -144,7 +156,25 @@ header .version{font-size:.78rem;color:var(--muted);margin-left:auto}
 
     <div id="fileInfo" style="margin:14px 0;font-size:.9rem;display:none"></div>
 
-    <details style="margin-top:16px">
+    <!-- Processing Mode -->
+    <div class="mode-row">
+      <label for="modeSelect">Processing Mode</label>
+      <select id="modeSelect">
+        <option value="local">🖥 Local Models</option>
+        <option value="azure">☁ Azure Cloud</option>
+      </select>
+      <span class="mode-badge local" id="modeBadge">LOCAL</span>
+      <label for="docTypeSelect" id="docTypeLabel" style="margin-left:18px;display:none">Document Type</label>
+      <select id="docTypeSelect" style="display:none">
+        <option value="auto">Auto-detect</option>
+        <option value="bol">Bill of Lading</option>
+        <option value="invoice">Invoice</option>
+        <option value="receipt">Receipt</option>
+        <option value="delivery_ticket">Delivery Ticket</option>
+      </select>
+    </div>
+
+    <details style="margin-top:16px" id="localOptionsDetails">
       <summary style="cursor:pointer;color:var(--muted);font-size:.88rem">⚙ Processing Options</summary>
       <div class="options" id="optionsGrid">
         <label class="opt"><input type="checkbox" name="preprocess" checked> Preprocess</label>
@@ -209,6 +239,22 @@ const statusText    = $('#statusText');
 const statusTime    = $('#statusTime');
 const lightbox      = $('#lightbox');
 const lightboxImg   = $('#lightboxImg');
+const modeSelect    = $('#modeSelect');
+const modeBadge     = $('#modeBadge');
+const docTypeSelect = $('#docTypeSelect');
+const docTypeLabel  = $('#docTypeLabel');
+const localDetails  = $('#localOptionsDetails');
+
+// ─── Mode toggle ──────────────────────────────────────────────────
+modeSelect.addEventListener('change', () => {
+  const mode = modeSelect.value;
+  modeBadge.textContent = mode.toUpperCase();
+  modeBadge.className = 'mode-badge ' + mode;
+  const isAzure = mode === 'azure';
+  localDetails.style.display = isAzure ? 'none' : '';
+  docTypeSelect.style.display = isAzure ? '' : 'none';
+  docTypeLabel.style.display = isAzure ? '' : 'none';
+});
 
 // ─── Version badge ────────────────────────────────────────────────
 fetch('/api/jobs/_').catch(()=>{});
@@ -250,6 +296,8 @@ btnProcess.addEventListener('click', async () => {
   // Collect options
   const form = new FormData();
   form.append('file', selectedFile);
+  form.append('processing_mode', modeSelect.value);
+  form.append('document_type', docTypeSelect.value);
   $$('#optionsGrid input[type=checkbox]').forEach(cb => {
     form.append(cb.name, cb.checked ? 'true' : 'false');
   });

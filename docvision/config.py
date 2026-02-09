@@ -14,6 +14,64 @@ import torch
 from loguru import logger
 
 
+class ProcessingMode:
+    """Processing mode selector."""
+    LOCAL = "local"       # All local models (YOLO, CRAFT, TrOCR, etc.)
+    AZURE = "azure"       # Azure Document Intelligence + GPT-4o (cloud)
+    HYBRID = "hybrid"     # Azure for OCR/layout, local for post-processing
+
+
+@dataclass
+class AzureConfig:
+    """Azure AI Foundry configuration for cloud-based processing."""
+    # Processing mode: "local", "azure", or "hybrid"
+    processing_mode: str = ProcessingMode.LOCAL
+
+    # Azure Document Intelligence (replaces YOLO + CRAFT + TrOCR + TATR + Tesseract)
+    doc_intelligence_endpoint: str = ""  # e.g. https://xxx.cognitiveservices.azure.com/
+    doc_intelligence_key: str = ""        # API key (prefer env var AZURE_DOC_INTELLIGENCE_KEY)
+    doc_intelligence_model: str = "prebuilt-layout"  # prebuilt-layout, prebuilt-read, prebuilt-invoice
+
+    # Azure OpenAI / GPT Vision (replaces Donut + LayoutLMv3 KIE)
+    openai_endpoint: str = ""             # e.g. https://xxx.openai.azure.com/
+    openai_key: str = ""                  # API key (prefer env var AZURE_OPENAI_KEY)
+    openai_deployment: str = "gpt-4o-mini"  # gpt-5.2, gpt-5-nano, gpt-5-mini, gpt-4o-mini, gpt-4.1-mini
+    openai_api_version: str = "2024-12-01-preview"  # Azure OpenAI API version
+    use_gpt_vision_kie: bool = True       # Whether to use GPT-4o for field extraction
+
+    # GPT-4o structured extraction settings
+    gpt_max_tokens: int = 4096
+    gpt_temperature: float = 0.0          # Deterministic for extraction
+    document_type: str = "auto"           # auto, bol, invoice, receipt, delivery_ticket
+
+    def __post_init__(self):
+        """Load keys from environment variables if not set in config."""
+        import os
+        try:
+            from dotenv import load_dotenv
+            load_dotenv()  # Load .env file if present
+        except ImportError:
+            pass  # python-dotenv not installed — rely on real env vars
+        if not self.doc_intelligence_key:
+            self.doc_intelligence_key = os.environ.get("AZURE_DOC_INTELLIGENCE_KEY", "")
+        if not self.openai_key:
+            self.openai_key = os.environ.get("AZURE_OPENAI_KEY", "")
+        if not self.doc_intelligence_endpoint:
+            self.doc_intelligence_endpoint = os.environ.get("AZURE_DOC_INTELLIGENCE_ENDPOINT", "")
+        if not self.openai_endpoint:
+            self.openai_endpoint = os.environ.get("AZURE_OPENAI_ENDPOINT", "")
+
+    @property
+    def is_azure_ready(self) -> bool:
+        """Check if Azure Document Intelligence is configured."""
+        return bool(self.doc_intelligence_endpoint and self.doc_intelligence_key)
+
+    @property
+    def is_openai_ready(self) -> bool:
+        """Check if Azure OpenAI is configured."""
+        return bool(self.openai_endpoint and self.openai_key and self.openai_deployment)
+
+
 @dataclass
 class RuntimeConfig:
     """Runtime configuration settings."""
@@ -151,6 +209,7 @@ class Config:
     validators: ValidatorsConfig = field(default_factory=ValidatorsConfig)
     artifacts: ArtifactsConfig = field(default_factory=ArtifactsConfig)
     output: OutputConfig = field(default_factory=OutputConfig)
+    azure: AzureConfig = field(default_factory=AzureConfig)
     
     @classmethod
     def from_dict(cls, data: dict) -> "Config":
@@ -175,6 +234,8 @@ class Config:
             config.artifacts = ArtifactsConfig(**data["artifacts"])
         if "output" in data:
             config.output = OutputConfig(**data["output"])
+        if "azure" in data:
+            config.azure = AzureConfig(**data["azure"])
         
         return config
 
