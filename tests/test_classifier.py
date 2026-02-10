@@ -260,7 +260,9 @@ class TestClassifyFlow:
 
         call_kwargs = mock_client.chat.completions.create.call_args
         assert call_kwargs.kwargs["model"] == "gpt-5-nano"
-        assert call_kwargs.kwargs["max_tokens"] == 100
+        # Accepts either new or legacy token-limit parameter
+        token_limit = call_kwargs.kwargs.get("max_completion_tokens") or call_kwargs.kwargs.get("max_tokens")
+        assert token_limit == 200
 
     def test_classify_records_cost(self, azure_config, dummy_image):
         cost_tracker = MagicMock()
@@ -352,3 +354,66 @@ class TestClassifierPrompt:
     def test_prompt_mentions_all_complexities(self):
         for c in ("simple", "medium", "complex"):
             assert c in _CLASSIFIER_SYSTEM
+
+    def test_temperature_unsupported_fallback(self, classifier, dummy_image):
+        """When the model rejects temperature=0.0, retry without it."""
+        mock_resp = _mock_response('{"type": "bol", "complexity": "medium"}')
+        mock_client = MagicMock()
+        # First call raises temperature error, second call succeeds
+        mock_client.chat.completions.create.side_effect = [
+            Exception(
+                "Unsupported value: 'temperature' does not support 0.0 "
+                "with this model. Only the default (1) value is supported."
+            ),
+            mock_resp,
+        ]
+        classifier._client = mock_client
+
+        result = classifier.classify(dummy_image)
+
+        assert result.document_type == "bol"
+        assert mock_client.chat.completions.create.call_count == 2
+        # Second call should not have temperature kwarg
+        retry_kwargs = mock_client.chat.completions.create.call_args_list[1].kwargs
+        assert "temperature" not in retry_kwargs
+
+    def test_empty_content_retries_text_only(self, classifier, dummy_image):
+        """When image-based call returns empty content, retry text-only."""
+        empty_resp = _mock_response("", prompt_tokens=465, completion_tokens=100)
+        # Make the empty response's message.content return empty string
+        empty_resp.choices[0].message.content = ""
+        text_resp = _mock_response(
+            '{"type": "other", "complexity": "medium"}',
+            prompt_tokens=60,
+            completion_tokens=15,
+        )
+        mock_client = MagicMock()
+        # First call (image) → empty, second call (text-only) → valid JSON
+        mock_client.chat.completions.create.side_effect = [empty_resp, text_resp]
+        classifier._client = mock_client
+
+        result = classifier.classify(dummy_image)
+
+        assert result.document_type == "other"
+        assert result.complexity == "medium"
+        # Two API calls: image-based + text-only retry
+        assert mock_client.chat.completions.create.call_count == 2
+        # Second call should be text-only (no image_url in content)
+        retry_msgs = mock_client.chat.completions.create.call_args_list[1].kwargs["messages"]
+        user_content = retry_msgs[1]["content"]
+        assert isinstance(user_content, str)  # text-only, not a list with image
+
+    def test_empty_content_both_attempts_returns_default(self, classifier, dummy_image):
+        """When both image and text-only return empty, fall back to defaults."""
+        empty_resp1 = _mock_response("")
+        empty_resp1.choices[0].message.content = ""
+        empty_resp2 = _mock_response("")
+        empty_resp2.choices[0].message.content = ""
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.side_effect = [empty_resp1, empty_resp2]
+        classifier._client = mock_client
+
+        result = classifier.classify(dummy_image)
+
+        assert result.document_type == "auto"
+        assert result.complexity == "medium"

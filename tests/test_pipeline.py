@@ -250,3 +250,146 @@ class TestDonutParser:
         assert "items[0].item_desc" in names
         assert "items[1].item_qty" in names
         assert "summary.total_gross_worth" in names
+
+
+# ===========================================================================
+#  Spatial Anchoring — _anchor_fields_to_text
+# ===========================================================================
+
+class TestSpatialAnchoring:
+    """Tests for the _anchor_fields_to_text bbox bridging logic."""
+
+    @staticmethod
+    def _make_text_line(text, x1, y1, x2, y2, words=None):
+        from docvision.types import TextLine, BoundingBox, Word, SourceEngine
+        bbox = BoundingBox(x1=x1, y1=y1, x2=x2, y2=y2)
+        if words is None:
+            # Auto-create one word per whitespace-separated token
+            parts = text.split()
+            w_width = (x2 - x1) / max(len(parts), 1)
+            words = []
+            for i, part in enumerate(parts):
+                words.append(Word(
+                    text=part,
+                    bbox=BoundingBox(
+                        x1=x1 + i * w_width,
+                        y1=y1,
+                        x2=x1 + (i + 1) * w_width,
+                        y2=y2,
+                    ),
+                    confidence=0.95,
+                    source=SourceEngine.TROCR,
+                ))
+        return TextLine(
+            text=text, bbox=bbox, words=words, confidence=0.95,
+            source=SourceEngine.TROCR,
+        )
+
+    @staticmethod
+    def _make_field(name, value):
+        from docvision.types import Field, Candidate, SourceEngine, FieldStatus
+        return Field(
+            name=name,
+            value=value,
+            confidence=0.90,
+            status=FieldStatus.CONFIDENT,
+            page=1,
+            chosen_source=SourceEngine.GPT_VISION,
+            candidates=[
+                Candidate(source=SourceEngine.GPT_VISION, value=value, confidence=0.90, page=1)
+            ],
+        )
+
+    @staticmethod
+    def _make_table_with_cell(text, x1, y1, x2, y2):
+        from docvision.types import Table, Cell, BoundingBox
+        cell = Cell(row=0, col=0, text=text, bbox=BoundingBox(x1=x1, y1=y1, x2=x2, y2=y2), confidence=0.9)
+        return Table(
+            page=1, bbox=BoundingBox(x1=x1, y1=y1, x2=x2, y2=y2),
+            rows=1, cols=1, cells=[cell], confidence=0.9,
+        )
+
+    def _get_processor_cls(self):
+        from docvision.pipeline.orchestrator import DocumentProcessor
+        return DocumentProcessor
+
+    def test_exact_word_match(self):
+        """Field value matches a single word — gets the word's tight bbox."""
+        tl = self._make_text_line("Invoice Number: INV-12345", 10, 20, 500, 40)
+        field = self._make_field("invoice_number", "INV-12345")
+
+        self._get_processor_cls()._anchor_fields_to_text([field], [tl], [])
+        assert field.bbox is not None
+        assert field.bbox.x1 > 10  # Should be the word box, not the whole line
+
+    def test_exact_line_match(self):
+        """Field value matches an entire text line."""
+        tl = self._make_text_line("ACME Corporation", 50, 100, 400, 130)
+        field = self._make_field("vendor_name", "ACME Corporation")
+
+        self._get_processor_cls()._anchor_fields_to_text([field], [tl], [])
+        assert field.bbox is not None
+        assert field.bbox.x1 == 50
+        assert field.bbox.y2 == 130
+
+    def test_substring_match(self):
+        """Field value is a substring within a text line — merges word bboxes."""
+        tl = self._make_text_line("Date: 2025-01-15 Ref: ABC", 10, 50, 600, 70)
+        field = self._make_field("invoice_date", "2025-01-15")
+
+        self._get_processor_cls()._anchor_fields_to_text([field], [tl], [])
+        assert field.bbox is not None
+
+    def test_table_cell_match(self):
+        """Field value matches a table cell when no text line matches."""
+        tbl = self._make_table_with_cell("$1,234.56", 200, 300, 350, 330)
+        field = self._make_field("total_amount", "$1,234.56")
+
+        self._get_processor_cls()._anchor_fields_to_text([field], [], [tbl])
+        assert field.bbox is not None
+        assert field.bbox.x1 == 200
+
+    def test_no_match_leaves_none(self):
+        """When no match is found, bbox stays None."""
+        tl = self._make_text_line("Completely unrelated text here", 10, 10, 400, 30)
+        field = self._make_field("customer_name", "John Smith")
+
+        self._get_processor_cls()._anchor_fields_to_text([field], [tl], [])
+        assert field.bbox is None
+
+    def test_skips_na_values(self):
+        """Fields with N/A value should not be anchored."""
+        tl = self._make_text_line("N/A", 10, 10, 50, 30)
+        field = self._make_field("po_number", "N/A")
+
+        self._get_processor_cls()._anchor_fields_to_text([field], [tl], [])
+        assert field.bbox is None
+
+    def test_candidate_bbox_updated(self):
+        """When a field gets anchored, its matching candidates are also updated."""
+        tl = self._make_text_line("BOL-99887766", 100, 200, 300, 220)
+        field = self._make_field("bol_number", "BOL-99887766")
+
+        self._get_processor_cls()._anchor_fields_to_text([field], [tl], [])
+        assert field.bbox is not None
+        assert field.candidates[0].bbox is not None
+        assert field.candidates[0].bbox.x1 == field.bbox.x1
+
+    def test_already_has_bbox_is_skipped(self):
+        """Fields that already have a bbox should not be overwritten."""
+        from docvision.types import BoundingBox
+        tl = self._make_text_line("INV-999", 100, 200, 300, 220)
+        field = self._make_field("invoice_number", "INV-999")
+        original_bbox = BoundingBox(x1=1, y1=2, x2=3, y2=4)
+        field.bbox = original_bbox
+
+        self._get_processor_cls()._anchor_fields_to_text([field], [tl], [])
+        assert field.bbox is original_bbox  # unchanged
+
+    def test_case_insensitive_match(self):
+        """Matching should be case-insensitive."""
+        tl = self._make_text_line("acme corp", 50, 100, 300, 120)
+        field = self._make_field("vendor_name", "ACME CORP")
+
+        self._get_processor_cls()._anchor_fields_to_text([field], [tl], [])
+        assert field.bbox is not None

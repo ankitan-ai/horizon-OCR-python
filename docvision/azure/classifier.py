@@ -192,19 +192,41 @@ class DocumentClassifier:
         ]
 
         t0 = time.perf_counter()
-        try:
-            response = self.client.chat.completions.create(
-                model=self.CLASSIFIER_DEPLOYMENT,
-                messages=messages,
-                max_tokens=100,
-                temperature=0.0,
-            )
-        except Exception as exc:
-            logger.warning(f"Classification call failed ({exc}) — using defaults")
+        response = self._call_classifier(messages)
+        if response is None:
             return ClassificationResult()
 
         elapsed = time.perf_counter() - t0
-        raw = (response.choices[0].message.content or "").strip()
+        choice = response.choices[0] if response.choices else None
+        raw = self._extract_content(choice)
+
+        # If image-based call returned empty, retry with text-only prompt
+        if not raw:
+            logger.info("Classifier returned empty content — retrying text-only")
+            text_messages = [
+                {"role": "system", "content": _CLASSIFIER_SYSTEM},
+                {
+                    "role": "user",
+                    "content": (
+                        "I cannot show you the document image. Based on typical "
+                        "business documents, return a sensible default classification. "
+                        "The document is likely a standard business document."
+                    ),
+                },
+            ]
+            retry_resp = self._call_classifier(text_messages)
+            if retry_resp is not None:
+                retry_choice = (
+                    retry_resp.choices[0] if retry_resp.choices else None
+                )
+                raw = self._extract_content(retry_choice)
+                # Merge usage for cost tracking
+                if retry_resp.usage and response.usage:
+                    response.usage.prompt_tokens += retry_resp.usage.prompt_tokens
+                    response.usage.completion_tokens += (
+                        retry_resp.usage.completion_tokens
+                    )
+
         usage = response.usage
 
         logger.info(
@@ -244,6 +266,61 @@ class DocumentClassifier:
         return result
 
     # ── internals ────────────────────────────────────────────────────
+
+    def _call_classifier(self, messages: list) -> object | None:
+        """Send a chat completion request with model-quirk fallbacks.
+
+        Returns the response object or *None* if every attempt fails.
+        """
+        try:
+            try:
+                return self.client.chat.completions.create(
+                    model=self.CLASSIFIER_DEPLOYMENT,
+                    messages=messages,
+                    max_completion_tokens=200,
+                    temperature=0.0,
+                )
+            except Exception as inner:
+                inner_msg = str(inner)
+                if "max_completion_tokens" in inner_msg:
+                    return self.client.chat.completions.create(
+                        model=self.CLASSIFIER_DEPLOYMENT,
+                        messages=messages,
+                        max_tokens=200,
+                        temperature=0.0,
+                    )
+                elif "temperature" in inner_msg:
+                    return self.client.chat.completions.create(
+                        model=self.CLASSIFIER_DEPLOYMENT,
+                        messages=messages,
+                        max_completion_tokens=200,
+                    )
+                else:
+                    raise
+        except Exception as exc:
+            logger.warning(f"Classification call failed ({exc}) — using defaults")
+            return None
+
+    @staticmethod
+    def _extract_content(choice) -> str:
+        """Pull text content from a chat completion choice.
+
+        Also checks the ``refusal`` field and logs diagnostics when
+        the content is unexpectedly empty.
+        """
+        if choice is None or choice.message is None:
+            return ""
+        raw = (choice.message.content or "").strip()
+        if not raw:
+            refusal = getattr(choice.message, "refusal", None)
+            if refusal:
+                logger.warning(f"Classifier refused: {refusal}")
+            finish = getattr(choice, "finish_reason", None)
+            logger.debug(
+                f"Classifier empty content — finish_reason={finish}, "
+                f"choice={choice}"
+            )
+        return raw
 
     @staticmethod
     def _encode_image_b64(image: np.ndarray) -> str:

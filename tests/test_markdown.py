@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from docvision.io.markdown import generate_markdown, save_markdown
+from docvision.io.markdown import generate_markdown, save_markdown, _format_bbox
 
 
 # ── Fixtures ─────────────────────────────────────────────────────────────
@@ -561,3 +561,79 @@ class TestEdgeCases:
         text_table_lines = [l for l in lines if "line1" in l and "|" in l]
         for line in text_table_lines:
             assert "\n" not in line.split("|")[2]  # cell should not have raw newline
+
+
+# ── Spatial position tests ───────────────────────────────────────────────
+
+class TestSpatialPositions:
+    """Tests for bounding box / position rendering in markdown."""
+
+    def test_layout_regions_show_position(self, sample_result):
+        """Layout regions table should include Position column."""
+        md = generate_markdown(sample_result)
+        assert "Position" in md
+        # Region bbox should appear as (x1,y1)→(x2,y2)
+        assert "(10,10)" in md  # x1,y1 of lr1
+        assert "(100,50)" in md  # x2,y2 of lr1
+
+    def test_text_lines_show_position(self, sample_result):
+        """Text lines table should include Position column."""
+        md = generate_markdown(sample_result)
+        # Text line bbox (10,10)→(200,30)
+        assert "(10,10)" in md
+        assert "(200,30)" in md
+
+    def test_table_shows_position(self, sample_result):
+        """Table metadata should include spatial position."""
+        md = generate_markdown(sample_result)
+        # Table bbox is (10,100)→(400,300)
+        assert "(10,100)" in md
+        assert "(400,300)" in md
+
+    def test_fields_show_page_and_position(self, sample_result):
+        """Fields table should include Page and Position columns."""
+        md = generate_markdown(sample_result)
+        # Check that Page column header exists in fields section
+        assert "| Field | Value | Page | Position |" in md
+
+    def test_missing_bbox_renders_dash(self):
+        """Fields without a bbox should show — for position."""
+        data = {
+            "id": "nb1",
+            "metadata": {"filename": "nb.png", "file_type": "image",
+                         "file_size_bytes": 0, "processed_at": "", "processing_time_seconds": 0,
+                         "docvision_version": "0.1.0"},
+            "page_count": 0,
+            "pages": [],
+            "tables": [],
+            "fields": [
+                {"name": "test_field", "value": "hello", "confidence": 0.9,
+                 "status": "confident", "chosen_source": "donut",
+                 "candidates": []},
+            ],
+            "validation": {"passed": True, "total_checks": 0, "passed_checks": 0,
+                           "failed_checks": 0, "issues": [], "details": []},
+        }
+        md = generate_markdown(data)
+        # Position should be — when no bbox
+        assert "| —" in md or "| — |" in md
+
+
+# ── _format_bbox tests ──────────────────────────────────────────────────
+
+class TestFormatBbox:
+    """Tests for the _format_bbox helper."""
+
+    def test_valid_bbox(self):
+        assert _format_bbox({"x1": 10, "y1": 20, "x2": 100, "y2": 200}) == "`(10,20)→(100,200)`"
+
+    def test_none_bbox(self):
+        assert _format_bbox(None) == "—"
+
+    def test_empty_bbox(self):
+        assert _format_bbox({}) == "—"
+
+    def test_float_coords(self):
+        result = _format_bbox({"x1": 10.5, "y1": 20.3, "x2": 100.0, "y2": 200.0})
+        assert "10.5" in result
+        assert "20.3" in result

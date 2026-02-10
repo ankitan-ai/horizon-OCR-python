@@ -252,12 +252,24 @@ class GPTVisionExtractor:
             f"(deployment={deployment}, type={doc_type})"
         )
 
-        response = self.client.chat.completions.create(
-            model=deployment,
-            messages=messages,
-            max_tokens=self._config.gpt_max_tokens,
-            temperature=self._config.gpt_temperature,
-        )
+        try:
+            response = self.client.chat.completions.create(
+                model=deployment,
+                messages=messages,
+                max_completion_tokens=self._config.gpt_max_tokens,
+                temperature=self._config.gpt_temperature,
+            )
+        except Exception as _tok_err:
+            if "max_completion_tokens" in str(_tok_err):
+                # Older model — fall back to legacy parameter
+                response = self.client.chat.completions.create(
+                    model=deployment,
+                    messages=messages,
+                    max_tokens=self._config.gpt_max_tokens,
+                    temperature=self._config.gpt_temperature,
+                )
+            else:
+                raise
 
         elapsed = time.perf_counter() - t0
         raw_text = (response.choices[0].message.content or "").strip()

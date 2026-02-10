@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -31,6 +32,17 @@ def _conf_badge(confidence: float) -> str:
 def _pct(confidence: float) -> str:
     """Format confidence as a percentage string."""
     return f"{confidence * 100:.1f}%"
+
+
+def _format_bbox(bbox: Optional[Dict[str, Any]]) -> str:
+    """Format a bounding box dict as a compact position string."""
+    if not bbox:
+        return "—"
+    x1 = bbox.get("x1", 0)
+    y1 = bbox.get("y1", 0)
+    x2 = bbox.get("x2", 0)
+    y2 = bbox.get("y2", 0)
+    return f"`({x1},{y1})→({x2},{y2})`"
 
 
 # ── Section renderers ────────────────────────────────────────────────────
@@ -96,16 +108,17 @@ def _render_layout_regions(regions: List[Dict[str, Any]], page_num: int) -> str:
     lines = [
         f"### 🗺️ Layout Regions (Page {page_num})\n",
         f"*{len(regions)} region(s) detected*\n",
-        "| # | Type | Confidence | Content Type |",
-        "|---|------|-----------|--------------|",
+        "| # | Type | Position | Confidence | Content Type |",
+        "|---|------|----------|-----------|--------------|",
     ]
 
     for i, r in enumerate(regions, 1):
         rtype = r.get("type", "unknown")
         conf = r.get("confidence", 0)
         ctype = r.get("content_type", "unknown")
+        pos = _format_bbox(r.get("bbox"))
         lines.append(
-            f"| {i} | **{rtype}** | {_conf_badge(conf)} {_pct(conf)} | {ctype} |"
+            f"| {i} | **{rtype}** | {pos} | {_conf_badge(conf)} {_pct(conf)} | {ctype} |"
         )
 
     lines.append("")
@@ -120,16 +133,17 @@ def _render_text_lines(text_lines: List[Dict[str, Any]], page_num: int) -> str:
     lines = [
         f"### 📝 Extracted Text Lines (Page {page_num})\n",
         f"*{len(text_lines)} line(s) detected*\n",
-        "| # | Text | Confidence | Source |",
-        "|---|------|-----------|--------|",
+        "| # | Text | Position | Confidence | Source |",
+        "|---|------|----------|-----------|--------|",
     ]
 
     for i, tl in enumerate(text_lines, 1):
         text = _escape_md(tl.get("text", ""))
         conf = tl.get("confidence", 0)
         source = tl.get("source", "N/A")
+        pos = _format_bbox(tl.get("bbox"))
         lines.append(
-            f"| {i} | {text} | {_conf_badge(conf)} {_pct(conf)} | {source} |"
+            f"| {i} | {text} | {pos} | {_conf_badge(conf)} {_pct(conf)} | {source} |"
         )
 
     lines.append("")
@@ -145,13 +159,18 @@ def _render_table(table: Dict[str, Any], table_idx: int) -> str:
     page = table.get("page", "?")
     has_borders = table.get("has_borders", False)
 
+    bbox = table.get("bbox")
+    pos_line = f"- **Position:** {_format_bbox(bbox)}" if bbox else ""
+
     lines = [
         f"#### 📊 Table {table_idx} (Page {page})\n",
         f"- **Size:** {rows} rows × {cols} columns",
         f"- **Confidence:** {_conf_badge(conf)} {_pct(conf)}",
         f"- **Has Borders:** {'Yes' if has_borders else 'No'}",
-        "",
     ]
+    if pos_line:
+        lines.append(pos_line)
+    lines.append("")
 
     if not cells or rows == 0 or cols == 0:
         lines.append("*No cell data available.*\n")
@@ -242,8 +261,8 @@ def _render_fields(fields: List[Dict[str, Any]]) -> str:
 
     lines = [
         "## 🏷️ Extracted Fields\n",
-        "| Field | Value | Confidence | Status | Source |",
-        "|-------|-------|-----------|--------|--------|",
+        "| Field | Value | Page | Position | Confidence | Status | Source |",
+        "|-------|-------|------|----------|-----------|--------|--------|",
     ]
 
     for f in fields:
@@ -260,8 +279,10 @@ def _render_fields(fields: List[Dict[str, Any]]) -> str:
             "validation_failed": "❌",
         }.get(status, "❓")
 
+        page = f.get("page", "—")
+        pos = _format_bbox(f.get("bbox"))
         lines.append(
-            f"| **{name}** | {value} | {_conf_badge(conf)} {_pct(conf)} "
+            f"| **{name}** | {value} | {page} | {pos} | {_conf_badge(conf)} {_pct(conf)} "
             f"| {status_icon} {status} | {source} |"
         )
 
@@ -371,7 +392,7 @@ def generate_markdown(data: Dict[str, Any]) -> str:
     filename = data.get("metadata", {}).get("filename", "Document")
     parts.append(f"# 🔎 DocVision OCR Report — `{filename}`\n")
     parts.append(
-        f"> Generated on {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}\n"
+        f"> Generated on {datetime.now(ZoneInfo('America/New_York')).strftime('%Y-%m-%d %H:%M:%S %Z')}\n"
     )
     parts.append("---\n")
 

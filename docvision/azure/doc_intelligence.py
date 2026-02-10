@@ -142,7 +142,7 @@ class AzureDocIntelligenceProvider:
                         pages=1, model=self._config.doc_intelligence_model,
                         latency=0.0, cached=True,
                     )
-                return cached
+                return self._rehydrate_response(cached)
 
         t0 = time.perf_counter()
         logger.info(
@@ -235,7 +235,7 @@ class AzureDocIntelligenceProvider:
                         model=self._config.doc_intelligence_model,
                         latency=0.0, cached=True,
                     )
-                return cached
+                return self._rehydrate_response(cached)
 
         t0 = time.perf_counter()
         logger.info(
@@ -315,6 +315,59 @@ class AzureDocIntelligenceProvider:
                 "pages": num_pages,
             })
 
+        return self._rehydrate_response(response)
+
+    # ── cache rehydration ────────────────────────────────────────────────────
+
+    @staticmethod
+    def _rehydrate_response(response: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Reconstruct typed objects from a cached (JSON-deserialised) response.
+
+        The ``ResponseCache`` serialises ``LayoutRegion``, ``TextLine``,
+        ``Table`` etc. via ``model_dump()`` / ``asdict()``.  When loaded
+        back they are plain dicts.  This method converts them back into
+        the proper Pydantic models so downstream code (artifact overlays,
+        ``Page`` construction) can use attribute access.
+        """
+        if not isinstance(response, dict):
+            return response
+
+        # Handle multi-page batch responses
+        if "pages" in response:
+            response["pages"] = [
+                AzureDocIntelligenceProvider._rehydrate_response(p)
+                for p in response["pages"]
+            ]
+            return response
+
+        def _maybe_rehydrate(items: Any, model_cls: type) -> list:
+            """Convert a list of dicts into model instances if needed."""
+            if not isinstance(items, list):
+                return items
+            result = []
+            for item in items:
+                if isinstance(item, dict):
+                    try:
+                        result.append(model_cls.model_validate(item))
+                    except Exception:
+                        result.append(item)  # keep as-is on failure
+                else:
+                    result.append(item)
+            return result
+
+        if "layout_regions" in response:
+            response["layout_regions"] = _maybe_rehydrate(
+                response["layout_regions"], LayoutRegion
+            )
+        if "text_lines" in response:
+            response["text_lines"] = _maybe_rehydrate(
+                response["text_lines"], TextLine
+            )
+        if "tables" in response:
+            response["tables"] = _maybe_rehydrate(
+                response["tables"], Table
+            )
         return response
 
     # ── image encoding ───────────────────────────────────────────────────────

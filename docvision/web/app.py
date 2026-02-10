@@ -20,6 +20,7 @@ import threading
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, File, UploadFile, HTTPException, Form, Query
@@ -146,7 +147,7 @@ async def process_document(
         "status": "processing",
         "filename": file.filename,
         "processing_mode": processing_mode,
-        "created": datetime.utcnow().isoformat(),
+        "created": datetime.now(ZoneInfo("America/New_York")).isoformat(),
         "result": None,
         "error": None,
         "artifacts_dir": None,
@@ -250,7 +251,7 @@ async def process_batch(
             "status": "queued",
             "filename": file.filename,
             "processing_mode": processing_mode,
-            "created": datetime.utcnow().isoformat(),
+"created": datetime.now(ZoneInfo("America/New_York")).isoformat(),
             "result": None,
             "error": None,
             "artifacts_dir": None,

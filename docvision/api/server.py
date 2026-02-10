@@ -15,6 +15,7 @@ import asyncio
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from contextlib import asynccontextmanager
 import json
 
@@ -290,7 +291,7 @@ async def process_document_async(
     # Initialize job status
     _jobs[job_id] = {
         "status": "pending",
-        "created_at": datetime.utcnow(),
+        "created_at": datetime.now(ZoneInfo("America/New_York")),
         "completed_at": None,
         "result": None,
         "error": None,
@@ -331,13 +332,13 @@ async def _process_job(job_id: str, file_path: str):
             _jobs[job_id]["status"] = "failed"
             _jobs[job_id]["error"] = result.error
         
-        _jobs[job_id]["completed_at"] = datetime.utcnow()
+        _jobs[job_id]["completed_at"] = datetime.now(ZoneInfo("America/New_York"))
     
     except Exception as e:
         logger.error(f"Job {job_id} failed: {e}")
         _jobs[job_id]["status"] = "failed"
         _jobs[job_id]["error"] = str(e)
-        _jobs[job_id]["completed_at"] = datetime.utcnow()
+        _jobs[job_id]["completed_at"] = datetime.now(ZoneInfo("America/New_York"))
     
     finally:
         # Clean up temp file

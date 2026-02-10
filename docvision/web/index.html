@@ -150,7 +150,7 @@ header .version{font-size:.78rem;color:var(--muted);margin-left:auto}
 .view-toggle .vt-btn{padding:6px 16px;border:none;background:transparent;color:var(--muted);font-size:.84rem;cursor:pointer;border-radius:8px;font-weight:500;transition:.2s}
 .view-toggle .vt-btn.active{background:var(--primary);color:#fff}
 .result-table{width:100%;border-collapse:collapse;font-size:.84rem;background:var(--surface);border-radius:var(--radius);overflow:hidden;border:1px solid var(--border)}
-.result-table th{background:var(--surface2);padding:8px 12px;text-align:left;font-weight:600;color:var(--muted);font-size:.78rem;text-transform:uppercase}
+.result-table th{background:var(--surface2);padding:8px 12px;text-align:left;font-weight:600;color:var(--text);font-size:.78rem;text-transform:uppercase;letter-spacing:.4px}
 .result-table td{padding:7px 12px;border-top:1px solid var(--border)}
 .result-table td input{width:100%;background:transparent;border:none;color:var(--text);font-size:.84rem;padding:2px 0;font-family:var(--font)}
 .result-table td input:focus{outline:none;border-bottom:1px solid var(--primary)}
@@ -214,6 +214,64 @@ header .version{font-size:.78rem;color:var(--muted);margin-left:auto}
 .breakdown-item .lbl{color:var(--muted)}
 .breakdown-item .val{font-weight:600;font-family:var(--mono)}
 
+/* ── Report Viewer ──────────────────────────────────────────────── */
+.report{font-size:.9rem;line-height:1.7;color:var(--text)}
+.report h2{font-size:1.2rem;font-weight:700;margin:28px 0 12px;padding-bottom:8px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+.report h3{font-size:1rem;font-weight:600;margin:22px 0 10px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.report h4{font-size:.92rem;font-weight:600;margin:16px 0 8px}
+.report hr{border:none;border-top:1px solid var(--border);margin:24px 0}
+.report-meta{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin:12px 0 18px}
+.report-meta-item{background:var(--surface);border-radius:var(--radius);padding:10px 14px;border:1px solid var(--border)}
+.report-meta-item .rml{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:600}
+.report-meta-item .rmv{font-size:.95rem;font-weight:600;margin-top:2px;word-break:break-all}
+.report-table{width:100%;border-collapse:collapse;margin:10px 0 16px;font-size:.84rem;background:var(--surface);border-radius:var(--radius);overflow:hidden;border:1px solid var(--border)}
+.report-table th{background:var(--surface2);padding:9px 14px;text-align:left;font-weight:600;color:var(--text);font-size:.78rem;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap}
+.report-table td{padding:8px 14px;border-top:1px solid var(--border);vertical-align:top}
+.report-table tr:hover td{background:rgba(99,102,241,.04)}
+.report-table td.num{text-align:right;font-family:var(--mono);font-size:.82rem}
+.spatial-badge{display:inline-flex;align-items:center;gap:4px;font-size:.68rem;padding:2px 8px;border-radius:12px;background:var(--primary-bg);color:var(--primary);font-family:var(--mono);white-space:nowrap;font-weight:600}
+.spatial-badge.page-loc{background:rgba(34,197,94,.1);color:var(--success)}
+.page-section{background:var(--surface);border-radius:var(--radius);padding:18px 22px;margin:14px 0;border:1px solid var(--border)}
+.page-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+.page-header .page-num{font-size:1.05rem;font-weight:700;display:flex;align-items:center;gap:6px}
+.page-header .page-info{font-size:.78rem;color:var(--muted);display:flex;gap:12px}
+.field-group{margin:14px 0}
+.field-row{display:flex;align-items:flex-start;gap:12px;padding:8px 0;border-bottom:1px solid var(--border);font-size:.86rem}
+.field-row:last-child{border-bottom:none}
+.field-row .fr-name{min-width:160px;font-weight:600;color:var(--muted);font-size:.8rem;text-transform:uppercase;letter-spacing:.3px;padding-top:2px}
+.field-row .fr-value{flex:1;font-weight:500;word-break:break-word}
+.field-row .fr-conf{display:flex;align-items:center;gap:6px;min-width:90px;justify-content:flex-end}
+.field-row .fr-source{font-size:.7rem;padding:1px 6px;border-radius:8px;background:var(--primary-bg);color:var(--primary);white-space:nowrap}
+.conf-bar{width:48px;height:6px;border-radius:3px;background:var(--surface3);overflow:hidden;display:inline-block}
+.conf-bar-fill{height:100%;border-radius:3px;transition:width .3s}
+.conf-bar-fill.high{background:var(--conf-high)}
+.conf-bar-fill.mid{background:var(--conf-mid)}
+.conf-bar-fill.low{background:var(--conf-low)}
+.status-pill{font-size:.7rem;padding:2px 8px;border-radius:10px;font-weight:600;white-space:nowrap}
+.status-pill.confident,.status-pill.validated{background:rgba(34,197,94,.12);color:var(--success)}
+.status-pill.uncertain{background:rgba(245,158,11,.12);color:var(--warning)}
+.status-pill.single_source{background:rgba(99,102,241,.12);color:var(--primary)}
+.status-pill.validation_failed{background:rgba(239,68,68,.12);color:var(--error)}
+.rpt-table-wrap{overflow-x:auto;margin:10px 0 16px;border:1px solid var(--border);border-radius:var(--radius)}
+.rpt-table{width:100%;border-collapse:collapse;font-size:.84rem;background:var(--surface);min-width:400px}
+.rpt-table th{background:var(--surface2);padding:10px 14px;text-align:left;font-weight:600;color:var(--text);font-size:.82rem;white-space:nowrap;border-bottom:2px solid var(--border)}
+.rpt-table td{padding:9px 14px;border-top:1px solid var(--border)}
+.rpt-table tr:hover td{background:rgba(99,102,241,.04)}
+.rpt-table td.cell-high{border-left:3px solid var(--conf-high)}
+.rpt-table td.cell-mid{border-left:3px solid var(--conf-mid)}
+.rpt-table td.cell-low{border-left:3px solid var(--conf-low)}
+.candidates-toggle{cursor:pointer;color:var(--primary);font-size:.78rem;font-weight:500;padding:2px 0}
+.candidates-panel{margin:6px 0 4px 12px;font-size:.8rem;display:none}
+.candidates-panel.show{display:block}
+.candidate-row{display:flex;gap:10px;padding:3px 0;color:var(--muted)}
+.candidate-row .cr-src{font-weight:600;min-width:100px}
+.validation-box{padding:16px 20px;border-radius:var(--radius);margin:14px 0;border:1px solid}
+.validation-box.passed{background:rgba(34,197,94,.06);border-color:rgba(34,197,94,.25)}
+.validation-box.failed{background:rgba(239,68,68,.06);border-color:rgba(239,68,68,.25)}
+.validation-box .vb-header{display:flex;align-items:center;gap:8px;font-weight:700;font-size:1rem;margin-bottom:6px}
+.validation-box .vb-stats{font-size:.84rem;color:var(--muted);margin-bottom:8px}
+.issue-item{padding:4px 0;font-size:.84rem;color:var(--warning)}
+
 /* ── Responsive ────────────────────────────────────────────────── */
 @media(max-width:640px){
   .app{padding:12px 14px 40px}
@@ -221,6 +279,9 @@ header .version{font-size:.78rem;color:var(--muted);margin-left:auto}
   .options{grid-template-columns:1fr 1fr}
   .tabs{overflow-x:auto}
   .field-grid{grid-template-columns:1fr}
+  .report-meta{grid-template-columns:1fr}
+  .field-row{flex-direction:column;gap:4px}
+  .field-row .fr-conf{justify-content:flex-start}
 }
 </style>
 </head>
@@ -680,6 +741,13 @@ function tickTimer() {
 async function pollStatus() {
   try {
     const res = await fetch(`/api/jobs/${currentJobId}`);
+    if (!res.ok) {
+      // Job not found (e.g. stale ID after server restart) — stop polling
+      statusText.textContent = '⚠️ Job not found — please resubmit';
+      setTimeout(() => statusBar.classList.remove('show'), 4000);
+      btnProcess.disabled = false;
+      return;
+    }
     const job = await res.json();
     if (job.status === 'completed') {
       statusText.textContent = '✅ Processing complete!';
@@ -829,6 +897,7 @@ function renderOutput() {
   let html = `
     <div class="view-toggle">
       <button class="vt-btn ${outputView === 'fields' ? 'active' : ''}" onclick="switchView('fields')">📋 Fields &amp; Tables</button>
+      <button class="vt-btn ${outputView === 'report' ? 'active' : ''}" onclick="switchView('report')">📑 Report Viewer</button>
       <button class="vt-btn ${outputView === 'json' ? 'active' : ''}" onclick="switchView('json')">{ } JSON Editor</button>
     </div>
     <div class="editor-toolbar">
@@ -838,7 +907,9 @@ function renderOutput() {
       <button class="btn btn-secondary btn-sm" onclick="downloadMarkdown()" style="background:#4a9eff">📝 Markdown</button>
     </div>`;
 
-  html += outputView === 'fields' ? renderFieldEditor() : renderJsonEditor();
+  if (outputView === 'fields') html += renderFieldEditor();
+  else if (outputView === 'report') html += renderReportView();
+  else html += renderJsonEditor();
   html += '<div class="json-status" id="jsonStatus"></div>';
   el.innerHTML = html;
 
@@ -849,11 +920,11 @@ function renderOutput() {
 }
 
 function switchView(view) {
-  if (outputView === 'json' && view === 'fields') {
+  if (outputView === 'json') {
     const ed = $('#jsonEditor');
     if (ed) { try { currentResult = JSON.parse(ed.value); } catch {} }
   }
-  if (outputView === 'fields' && view === 'json') syncFieldEdits();
+  if (outputView === 'fields') syncFieldEdits();
   outputView = view;
   renderOutput();
 }
@@ -943,6 +1014,284 @@ function renderFieldEditor() {
   }
 
   return html;
+}
+
+// ── Report Viewer ─────────────────────────────────────────────────
+function renderReportView() {
+  const r = currentResult;
+  if (!r) return '<div class="empty"><div class="icon">📑</div><p>No result yet</p></div>';
+  let h = '<div class="report">';
+
+  // ── Title & Meta ──
+  const fn = r.metadata?.filename || 'Document';
+  const meta = r.metadata || {};
+  h += `<h2>🔎 OCR Report — ${esc(fn)}</h2>`;
+  h += '<div class="report-meta">';
+  h += rptMeta('Filename', fn);
+  h += rptMeta('File Type', meta.file_type || '—');
+  h += rptMeta('File Size', fmtBytes(meta.file_size_bytes || 0));
+  h += rptMeta('Pages', r.page_count || 0);
+  h += rptMeta('Processing Time', (meta.processing_time_seconds || 0).toFixed(2) + 's');
+  h += rptMeta('Processed At', meta.processed_at ? new Date(meta.processed_at).toLocaleString() : '—');
+  h += rptMeta('Total Fields', (r.fields || []).length);
+  h += rptMeta('Total Tables', (r.tables || []).length);
+  h += '</div>';
+
+  // ── Per-page sections ──
+  const pages = r.pages || [];
+  pages.forEach((page, pi) => {
+    const pn = page.page_number || page.number || (pi + 1);
+    const pm = page.metadata || {};
+    h += '<div class="page-section">';
+    h += '<div class="page-header">';
+    h += `<span class="page-num">📑 Page ${pn}</span>`;
+    h += '<span class="page-info">';
+    if (pm.width && pm.height) h += `<span>${pm.width}×${pm.height} px</span>`;
+    if (pm.dpi) h += `<span>${pm.dpi} DPI</span>`;
+    if (pm.content_type) h += `<span>${pm.content_type}</span>`;
+    if (pm.readability) {
+      const rIcon = {good:'✅',fair:'⚠️',poor:'❌'}[pm.readability] || '❓';
+      h += `<span>${rIcon} ${pm.readability}</span>`;
+    }
+    h += '</span></div>';
+
+    // Layout regions
+    const regions = page.layout_regions || [];
+    if (regions.length) {
+      h += `<h4>🗺️ Layout Regions (${regions.length})</h4>`;
+      h += '<table class="report-table"><thead><tr><th>#</th><th>Type</th><th>Position</th><th>Confidence</th><th>Content</th></tr></thead><tbody>';
+      regions.forEach((rg, ri) => {
+        const bb = rg.bbox || {};
+        h += `<tr><td>${ri+1}</td><td><strong>${rg.type || '?'}</strong></td>`;
+        h += `<td><span class="spatial-badge">x:${bb.x1||0} y:${bb.y1||0} → ${bb.x2||0},${bb.y2||0}</span></td>`;
+        h += `<td>${confBadge(rg.confidence||0)} ${confBarHtml(rg.confidence||0)}</td>`;
+        h += `<td>${rg.content_type || '—'}</td></tr>`;
+      });
+      h += '</tbody></table>';
+    }
+
+    // Text lines
+    const lines = page.text_lines || [];
+    if (lines.length) {
+      h += `<h4>📝 Text Lines (${lines.length})</h4>`;
+      h += '<table class="report-table"><thead><tr><th>#</th><th>Text</th><th>Position</th><th>Confidence</th><th>Source</th></tr></thead><tbody>';
+      lines.forEach((tl, ti) => {
+        const bb = tl.bbox || {};
+        const cls = confClass(tl.confidence||0);
+        h += `<tr><td>${ti+1}</td>`;
+        h += `<td style="font-family:var(--mono);font-size:.82rem;color:var(--conf-${cls})">${esc(tl.text||'')}</td>`;
+        h += `<td><span class="spatial-badge">x:${bb.x1||0} y:${bb.y1||0}</span></td>`;
+        h += `<td>${confBadge(tl.confidence||0)} ${confBarHtml(tl.confidence||0)}</td>`;
+        h += `<td>${tl.source || '—'}</td></tr>`;
+      });
+      h += '</tbody></table>';
+    }
+
+    // Tables on this page
+    const pageTables = (page.tables || []);
+    const docTables = (r.tables || []).filter(t => t.page === pn);
+    const tables = pageTables.length ? pageTables : docTables;
+    if (tables.length) {
+      tables.forEach((tbl, ti) => {
+        const cells = tbl.cells || [];
+        const rows = tbl.rows || tbl.row_count || 0;
+        const cols = tbl.cols || tbl.col_count || tbl.columns || 0;
+        const tbb = tbl.bbox || {};
+        h += `<h4>📊 Table ${ti+1}</h4>`;
+        h += `<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:8px;font-size:.82rem;color:var(--muted)">`;
+        h += `<span><strong>Size:</strong> ${rows} rows × ${cols} cols</span>`;
+        h += `<span><strong>Confidence:</strong> ${confBadge(tbl.confidence||0)}</span>`;
+        if (tbb.x1 !== undefined) h += `<span class="spatial-badge page-loc">📍 x:${tbb.x1} y:${tbb.y1} → ${tbb.x2},${tbb.y2}</span>`;
+        h += `<span><strong>Borders:</strong> ${tbl.has_borders ? 'Yes' : 'No'}</span>`;
+        h += '</div>';
+
+        if (cells.length && rows > 0 && cols > 0) {
+          // Build grid
+          const grid = Array.from({length: rows}, () => Array(cols).fill({text:'', confidence:1, isHeader:false}));
+          cells.forEach(c => {
+            const cr = c.row, cc = c.col ?? c.column ?? 0;
+            if (cr >= 0 && cr < rows && cc >= 0 && cc < cols)
+              grid[cr][cc] = {text: c.text||'', confidence: c.confidence||0, isHeader: c.is_header||false};
+          });
+
+          h += '<div class="rpt-table-wrap"><table class="rpt-table">';
+          // Determine header row
+          const hasHeaders = cells.some(c => c.is_header);
+          if (hasHeaders) {
+            const hr = Math.min(...cells.filter(c => c.is_header).map(c => c.row));
+            h += '<thead><tr>';
+            grid[hr].forEach(cell => { h += `<th>${esc(cell.text) || '&nbsp;'}</th>`; });
+            h += '</tr></thead><tbody>';
+            for (let rr = hr+1; rr < rows; rr++) {
+              h += '<tr>';
+              grid[rr].forEach(cell => {
+                h += `<td class="cell-${confClass(cell.confidence)}">${esc(cell.text) || '&nbsp;'}</td>`;
+              });
+              h += '</tr>';
+            }
+          } else {
+            h += '<thead><tr>';
+            for (let cc = 0; cc < cols; cc++) h += `<th>Col ${cc+1}</th>`;
+            h += '</tr></thead><tbody>';
+            for (let rr = 0; rr < rows; rr++) {
+              h += '<tr>';
+              grid[rr].forEach(cell => {
+                h += `<td class="cell-${confClass(cell.confidence)}">${esc(cell.text) || '&nbsp;'}</td>`;
+              });
+              h += '</tr>';
+            }
+          }
+          h += '</tbody></table></div>';
+
+          // Low-confidence cells
+          const lowCells = cells.filter(c => (c.confidence||1) < 0.7);
+          if (lowCells.length) {
+            h += `<details style="margin:6px 0"><summary class="candidates-toggle">⚠️ ${lowCells.length} low-confidence cell(s)</summary><div style="margin:6px 0">`;
+            h += '<table class="report-table" style="font-size:.8rem"><thead><tr><th>Row</th><th>Col</th><th>Text</th><th>Confidence</th></tr></thead><tbody>';
+            lowCells.forEach(c => {
+              h += `<tr><td>${c.row}</td><td>${c.col??c.column??0}</td><td>${esc(c.text||'')}</td><td>${confBadge(c.confidence||0)}</td></tr>`;
+            });
+            h += '</tbody></table></div></details>';
+          }
+        } else {
+          h += '<p style="color:var(--muted);font-style:italic">No cell data available</p>';
+        }
+      });
+    }
+
+    h += '</div>'; // page-section
+  });
+
+  // ── Extracted Fields ──
+  const fields = r.fields || [];
+  if (fields.length) {
+    h += '<hr><h2>🏷️ Extracted Fields</h2>';
+    h += `<div class="conf-legend">
+      Confidence: <span class="dot" style="background:var(--conf-high)"></span> High (≥80%)
+      <span class="dot" style="background:var(--conf-mid)"></span> Medium (50-79%)
+      <span class="dot" style="background:var(--conf-low)"></span> Low (&lt;50%)
+    </div>`;
+
+    // Group fields by page
+    const byPage = {};
+    fields.forEach(f => {
+      const pg = f.page || 'doc';
+      if (!byPage[pg]) byPage[pg] = [];
+      byPage[pg].push(f);
+    });
+
+    Object.entries(byPage).forEach(([pg, flds]) => {
+      h += `<h3>📄 ${pg === 'doc' ? 'Document-level' : 'Page ' + pg} Fields (${flds.length})</h3>`;
+      h += '<div class="field-group">';
+      flds.forEach((f, fi) => {
+        const c = f.confidence || 0;
+        const uid = `cand_${pg}_${fi}`;
+        h += '<div class="field-row">';
+        h += `<span class="fr-name">${esc(f.name || 'unnamed')}</span>`;
+        h += `<span class="fr-value">${esc(String(f.value ?? ''))}</span>`;
+        h += '<span class="fr-conf">';
+        if (f.status) h += `<span class="status-pill ${f.status}">${f.status}</span>`;
+        h += `${confBadge(c)} ${confBarHtml(c)}`;
+        if (f.chosen_source || f.source) h += `<span class="fr-source">${f.chosen_source || f.source}</span>`;
+        h += '</span>';
+        h += '</div>';
+
+        // Candidates
+        const cands = f.candidates || [];
+        if (cands.length > 1) {
+          h += `<div style="padding-left:172px"><span class="candidates-toggle" onclick="toggleCandidates('${uid}')">▸ ${cands.length} candidates</span>`;
+          h += `<div class="candidates-panel" id="${uid}">`;
+          cands.forEach(cd => {
+            h += `<div class="candidate-row"><span class="cr-src">${cd.source||'?'}</span><span>${esc(String(cd.value||''))}</span><span>${confBadge(cd.confidence||0)}</span></div>`;
+          });
+          h += '</div></div>';
+        }
+      });
+      h += '</div>';
+    });
+  }
+
+  // ── Validation ──
+  const v = r.validation;
+  if (v) {
+    h += '<hr>';
+    const passed = v.passed !== false;
+    h += `<div class="validation-box ${passed ? 'passed' : 'failed'}">`;
+    h += `<div class="vb-header">${passed ? '✅' : '❌'} Validation ${passed ? 'Passed' : 'Failed'}</div>`;
+    h += `<div class="vb-stats">${v.passed_checks||0} / ${v.total_checks||0} checks passed, ${v.failed_checks||0} failed</div>`;
+    const issues = v.issues || [];
+    if (issues.length) {
+      issues.forEach(iss => { h += `<div class="issue-item">⚠️ ${esc(iss)}</div>`; });
+    }
+    const details = v.details || [];
+    if (details.length) {
+      h += `<details style="margin-top:8px"><summary class="candidates-toggle">Detailed check results (${details.length})</summary>`;
+      h += '<table class="report-table" style="margin-top:6px"><thead><tr><th>Check</th><th>Result</th><th>Message</th></tr></thead><tbody>';
+      details.forEach(d => {
+        h += `<tr><td>${esc(d.name||'?')}</td><td>${d.passed ? '✅' : '❌'}</td><td>${esc(d.message||'')}</td></tr>`;
+      });
+      h += '</tbody></table></details>';
+    }
+    h += '</div>';
+  }
+
+  // ── Normalized (Azure) ──
+  if (r.normalized) {
+    h += '<hr><h2>📦 Normalized Output (Business-Ready)</h2>';
+    const n = r.normalized;
+    if (n.doc_type) h += `<p><strong>Document Type:</strong> ${esc(n.doc_type)}</p>`;
+    if (n.header_fields && Object.keys(n.header_fields).length) {
+      h += '<h3>Header Fields</h3><div class="field-group">';
+      Object.entries(n.header_fields).forEach(([k, v]) => {
+        h += `<div class="field-row"><span class="fr-name">${esc(k)}</span><span class="fr-value">${esc(String(v))}</span></div>`;
+      });
+      h += '</div>';
+    }
+    if (n.line_items && n.line_items.length) {
+      h += `<h3>Line Items (${n.line_items.length})</h3>`;
+      const keys = [...new Set(n.line_items.flatMap(li => Object.keys(li)))];
+      h += '<div class="rpt-table-wrap"><table class="rpt-table"><thead><tr>';
+      keys.forEach(k => { h += `<th>${esc(k)}</th>`; });
+      h += '</tr></thead><tbody>';
+      n.line_items.forEach(li => {
+        h += '<tr>';
+        keys.forEach(k => { h += `<td>${esc(String(li[k] ?? ''))}</td>`; });
+        h += '</tr>';
+      });
+      h += '</tbody></table></div>';
+    }
+    if (n.totals && Object.keys(n.totals).length) {
+      h += '<h3>Totals</h3><div class="field-group">';
+      Object.entries(n.totals).forEach(([k, v]) => {
+        h += `<div class="field-row"><span class="fr-name">${esc(k)}</span><span class="fr-value">${esc(String(v))}</span></div>`;
+      });
+      h += '</div>';
+    }
+  }
+
+  h += '<hr><p style="text-align:center;font-size:.78rem;color:var(--muted);margin-top:24px">Report generated by DocVision — Horizon OCR Pipeline</p>';
+  h += '</div>'; // .report
+  return h;
+}
+
+function rptMeta(label, value) {
+  return `<div class="report-meta-item"><div class="rml">${label}</div><div class="rmv">${esc(String(value))}</div></div>`;
+}
+
+function confBarHtml(c) {
+  const pct = Math.round(c * 100);
+  return `<span class="conf-bar"><span class="conf-bar-fill ${confClass(c)}" style="width:${pct}%"></span></span>`;
+}
+
+function fmtBytes(b) {
+  if (b < 1024) return b + ' B';
+  if (b < 1024*1024) return (b/1024).toFixed(1) + ' KB';
+  return (b/(1024*1024)).toFixed(2) + ' MB';
+}
+
+function toggleCandidates(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.toggle('show');
 }
 
 // ── JSON Editor view ──────────────────────────────────────────────

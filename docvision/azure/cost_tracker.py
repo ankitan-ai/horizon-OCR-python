@@ -24,6 +24,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from typing import Any, Dict, List, Optional
 
 from loguru import logger
@@ -107,7 +108,7 @@ class CostTracker:
             cost = pages * per_page
 
         record = APICallRecord(
-            timestamp=datetime.utcnow().isoformat(),
+            timestamp=datetime.now(ZoneInfo("America/New_York")).isoformat(),
             service="doc_intelligence",
             model=model,
             pages=pages,
@@ -156,7 +157,7 @@ class CostTracker:
             ) * output_rate
 
         record = APICallRecord(
-            timestamp=datetime.utcnow().isoformat(),
+            timestamp=datetime.now(ZoneInfo("America/New_York")).isoformat(),
             service="gpt_vision",
             model=deployment,
             prompt_tokens=prompt_tokens,

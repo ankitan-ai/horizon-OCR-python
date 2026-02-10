@@ -48,6 +48,7 @@ def _add_job(status="completed", mode="local", filename="test.pdf", result=None)
     """Helper to inject a job into the global state."""
     from docvision.web import app as web_module
     from datetime import datetime
+    from zoneinfo import ZoneInfo
     import uuid
 
     jid = str(uuid.uuid4())
@@ -104,7 +105,7 @@ def _add_job(status="completed", mode="local", filename="test.pdf", result=None)
         "filename": filename,
         "status": status,
         "processing_mode": mode,
-        "created": datetime.utcnow().isoformat(),
+        "created": datetime.now(ZoneInfo("America/New_York")).isoformat(),
         "result": result if status == "completed" else None,
         "error": "something failed" if status == "failed" else None,
         "artifacts_dir": None,

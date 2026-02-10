@@ -33,6 +33,9 @@ PyYAML>=6.0
 # Logging
 loguru>=0.7.0
 
+# Timezone data (required on Windows for zoneinfo)
+tzdata>=2024.1
+
 # Utilities
 numpy>=1.24.0,<2.0.0
 scipy>=1.11.0

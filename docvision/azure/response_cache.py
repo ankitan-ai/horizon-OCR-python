@@ -27,6 +27,7 @@ import json
 import threading
 import time
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -121,7 +122,7 @@ class ResponseCache:
         path = self.cache_dir / f"{key}.json"
         entry = {
             "key": key,
-            "cached_at": datetime.utcnow().isoformat(),
+            "cached_at": datetime.now(ZoneInfo("America/New_York")).isoformat(),
             "metadata": metadata or {},
             "response": self._serialise(response),
         }

@@ -345,6 +345,73 @@ class TestProcessPageAzure:
             str_args = [a for a in call_args if isinstance(a, str)]
             assert "OCR boost text" in str_args
 
+    def test_azure_page_detects_content_type(self, processor, sample_image):
+        """Azure pages should detect content_type instead of defaulting to UNKNOWN."""
+        mock_di = MagicMock()
+        mock_di.analyze.return_value = _stub_azure_result(1)
+        mock_gpt = MagicMock()
+        mock_gpt.extract.return_value = []
+
+        with patch.object(type(processor), "azure_di_provider", new_callable=PropertyMock, return_value=mock_di), \
+             patch.object(type(processor), "gpt_vision_extractor", new_callable=PropertyMock, return_value=mock_gpt):
+            opts = ProcessingOptions(processing_mode="azure", use_gpt_vision_kie=False)
+            result = processor._process_page_azure(sample_image, 1, "test", opts)
+
+        page = result["page"]
+        # content_type should be a valid ContentType (whatever the detector finds)
+        assert isinstance(page.metadata.content_type, ContentType)
+
+    def test_azure_page_detects_readability(self, processor, sample_image):
+        """Azure pages should run readability assessment."""
+        mock_di = MagicMock()
+        mock_di.analyze.return_value = _stub_azure_result(1)
+        mock_gpt = MagicMock()
+        mock_gpt.extract.return_value = []
+
+        with patch.object(type(processor), "azure_di_provider", new_callable=PropertyMock, return_value=mock_di), \
+             patch.object(type(processor), "gpt_vision_extractor", new_callable=PropertyMock, return_value=mock_gpt):
+            opts = ProcessingOptions(processing_mode="azure", use_gpt_vision_kie=False)
+            result = processor._process_page_azure(sample_image, 1, "test", opts)
+
+        page = result["page"]
+        assert page.metadata.readability in ("good", "fair", "poor")
+
+    def test_azure_page_metadata_detection_does_not_alter_image(self, processor, sample_image):
+        """The raw image sent to Azure DI must not be mutated by metadata detection."""
+        original = sample_image.copy()
+        mock_di = MagicMock()
+        mock_di.analyze.return_value = _stub_azure_result(1)
+        mock_gpt = MagicMock()
+        mock_gpt.extract.return_value = []
+
+        with patch.object(type(processor), "azure_di_provider", new_callable=PropertyMock, return_value=mock_di), \
+             patch.object(type(processor), "gpt_vision_extractor", new_callable=PropertyMock, return_value=mock_gpt):
+            opts = ProcessingOptions(processing_mode="azure", use_gpt_vision_kie=False)
+            processor._process_page_azure(sample_image, 1, "test", opts)
+
+        # The image passed to DI must be byte-identical to the original
+        assert np.array_equal(sample_image, original)
+        # Verify DI received the unmodified image
+        di_call_image = mock_di.analyze.call_args[0][0]
+        assert np.array_equal(di_call_image, original)
+
+    def test_azure_page_metadata_fallback_on_detection_error(self, processor, sample_image):
+        """If content type detection fails, should fall back to UNKNOWN/good."""
+        mock_di = MagicMock()
+        mock_di.analyze.return_value = _stub_azure_result(1)
+        mock_gpt = MagicMock()
+        mock_gpt.extract.return_value = []
+
+        with patch.object(type(processor), "azure_di_provider", new_callable=PropertyMock, return_value=mock_di), \
+             patch.object(type(processor), "gpt_vision_extractor", new_callable=PropertyMock, return_value=mock_gpt), \
+             patch("docvision.preprocess.enhance.detect_content_type", side_effect=RuntimeError("cv2 missing")):
+            opts = ProcessingOptions(processing_mode="azure", use_gpt_vision_kie=False)
+            result = processor._process_page_azure(sample_image, 1, "test", opts)
+
+        page = result["page"]
+        assert page.metadata.content_type == ContentType.UNKNOWN
+        assert page.metadata.readability == "good"
+
 
 # ──────────────────────────────────────────────────────────────
 # Lazy Property Tests

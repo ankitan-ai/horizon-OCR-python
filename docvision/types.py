@@ -11,6 +11,7 @@ Defines the complete JSON output schema with support for:
 from typing import Optional, List, Dict, Any, Literal
 from enum import Enum
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from pydantic import BaseModel, Field as PydanticField
 import uuid
 
@@ -259,7 +260,7 @@ class DocumentMetadata(BaseModel):
     filename: str
     file_type: str  # pdf, image
     file_size_bytes: int = 0
-    processed_at: datetime = PydanticField(default_factory=datetime.utcnow)
+    processed_at: datetime = PydanticField(default_factory=lambda: datetime.now(ZoneInfo("America/New_York")))
     processing_time_seconds: float = 0.0
     docvision_version: str = "0.1.0"
 

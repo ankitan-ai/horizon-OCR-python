@@ -14,6 +14,7 @@ import pytest
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 
 # ---------------------------------------------------------------------------
@@ -106,13 +107,13 @@ COST_DATA = {
             {
                 "service": "doc_intelligence", "model": "prebuilt-layout",
                 "pages": 1, "estimated_cost_usd": 0.01, "latency_seconds": 1.5,
-                "timestamp": datetime.utcnow().isoformat(), "cached": False,
+                "timestamp": datetime.now(ZoneInfo("America/New_York")).isoformat(), "cached": False,
                 "prompt_tokens": 0, "completion_tokens": 0,
             },
             {
                 "service": "gpt_vision", "model": "gpt-4o",
                 "pages": 1, "estimated_cost_usd": 0.005, "latency_seconds": 1.7,
-                "timestamp": datetime.utcnow().isoformat(), "cached": False,
+                "timestamp": datetime.now(ZoneInfo("America/New_York")).isoformat(), "cached": False,
                 "prompt_tokens": 300, "completion_tokens": 150,
             },
         ],
@@ -130,7 +131,7 @@ def _inject_azure_job():
         "status": "completed",
         "filename": "test_invoice.png",
         "processing_mode": "azure",
-        "created": datetime.utcnow().isoformat(),
+        "created": datetime.now(ZoneInfo("America/New_York")).isoformat(),
         "result": json.loads(json.dumps(AZURE_RESULT)),  # deep copy
         "error": None,
         "artifacts_dir": None,

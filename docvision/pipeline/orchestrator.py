@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Optional, List, Union, Dict, Any
 from dataclasses import dataclass, field
 from datetime import datetime
+from zoneinfo import ZoneInfo
 import json
 import numpy as np
 from loguru import logger
@@ -442,7 +443,7 @@ class DocumentProcessor:
                     filename=path.name,
                     file_type=file_type,
                     file_size_bytes=path.stat().st_size,
-                    processed_at=datetime.utcnow(),
+                    processed_at=datetime.now(ZoneInfo("America/New_York")),
                     processing_time_seconds=processing_time
                 ),
                 page_count=len(pages),
@@ -684,6 +685,16 @@ class DocumentProcessor:
 
             h, w = page_image.shape[:2]
 
+            # ── Image quality metadata (no image mutation) ──────────
+            try:
+                from docvision.preprocess.enhance import detect_content_type, assess_readability
+                page_content_type, _ = detect_content_type(page_image)
+                page_readability, page_readability_issues = assess_readability(page_image)
+            except Exception:
+                page_content_type = ContentType.UNKNOWN
+                page_readability = "good"
+                page_readability_issues = []
+
             # Reconstruct typed objects from cached/batch data
             text_lines = page_data.get("text_lines", [])
             tables = page_data.get("tables", [])
@@ -721,15 +732,18 @@ class DocumentProcessor:
                     deployment_override=gpt_deployment_override,
                 )
 
+                # Anchor GPT Vision fields to Azure DI spatial coordinates
+                self._anchor_fields_to_text(fields, text_lines, tables)
+
             page = Page(
                 number=page_num,
                 metadata=PageMetadata(
                     width=w,
                     height=h,
                     dpi=self.config.pdf.dpi,
-                    content_type=ContentType.UNKNOWN,
-                    readability="good",
-                    readability_issues=[],
+                    content_type=page_content_type,
+                    readability=page_readability,
+                    readability_issues=page_readability_issues,
                 ),
                 layout_regions=layout_regions,
                 text_lines=text_lines,
@@ -756,7 +770,7 @@ class DocumentProcessor:
                 filename=pdf_path.name,
                 file_type="pdf",
                 file_size_bytes=pdf_path.stat().st_size,
-                processed_at=datetime.utcnow(),
+                processed_at=datetime.now(ZoneInfo("America/New_York")),
                 processing_time_seconds=processing_time,
             ),
             page_count=len(pages),
@@ -793,6 +807,16 @@ class DocumentProcessor:
         """Process a single page using Azure cloud APIs."""
         h, w = image.shape[:2]
         logger.info(f"Processing page {page_num} via Azure cloud pipeline")
+
+        # ── Image quality metadata (no image mutation) ──────────────
+        try:
+            from docvision.preprocess.enhance import detect_content_type, assess_readability
+            content_type, _ = detect_content_type(image)
+            readability, readability_issues = assess_readability(image)
+        except Exception:
+            content_type = ContentType.UNKNOWN
+            readability = "good"
+            readability_issues = []
 
         # ── Azure Document Intelligence (OCR + layout + tables) ─────
         azure_result = self.azure_di_provider.analyze(image, page_num=page_num)
@@ -833,6 +857,9 @@ class DocumentProcessor:
                 deployment_override=gpt_deployment_override,
             )
 
+            # Anchor GPT Vision fields to Azure DI spatial coordinates
+            self._anchor_fields_to_text(fields, text_lines, tables)
+
         # ── Build page object ───────────────────────────────────────
         page = Page(
             number=page_num,
@@ -840,9 +867,9 @@ class DocumentProcessor:
                 width=w,
                 height=h,
                 dpi=self.config.pdf.dpi,
-                content_type=ContentType.UNKNOWN,
-                readability="good",
-                readability_issues=[],
+                content_type=content_type,
+                readability=readability,
+                readability_issues=readability_issues,
             ),
             layout_regions=layout_regions,
             text_lines=text_lines,
@@ -917,6 +944,132 @@ class DocumentProcessor:
         
         return text_lines
     
+    # ── Spatial anchoring ───────────────────────────────────────────────
+
+    @staticmethod
+    def _anchor_fields_to_text(
+        fields: List[Field],
+        text_lines: List["TextLine"],
+        tables: List["Table"],
+    ) -> List[Field]:
+        """
+        Attach bounding boxes to fields that lack spatial coordinates.
+
+        For every :class:`Field` (and its :class:`Candidate` entries) whose
+        ``bbox`` is ``None``, search the Azure DI ``text_lines`` and ``tables``
+        for a word/line/cell whose text matches the field value, and copy
+        the matching bounding box.
+
+        Match strategy (in priority order):
+        1. **Exact word match** — iterate all ``Word`` objects inside every
+           ``TextLine`` and pick the word whose ``text`` equals the normalised
+           field value.  This gives the tightest possible box.
+        2. **Exact line match** — if the field value equals a full
+           ``TextLine.text`` (after stripping), use the line's bbox.
+        3. **Substring / multi-word span** — if the field value appears as a
+           contiguous substring inside a ``TextLine``, compute a merged bbox
+           from the matching words.
+        4. **Table cell match** — search ``Cell.text`` across all tables.
+        5. If nothing matches, bbox stays ``None`` (no false anchoring).
+
+        Returns:
+            The same ``fields`` list (mutated in-place for convenience).
+        """
+        if not text_lines and not tables:
+            return fields
+
+        # Build a lookup: normalised word text → list of Word objects
+        from docvision.types import BoundingBox
+
+        word_index: Dict[str, List[Any]] = {}
+        for tl in text_lines:
+            for w in tl.words:
+                key = w.text.strip().lower()
+                if key:
+                    word_index.setdefault(key, []).append(w)
+
+        # Build a cell lookup: normalised cell text → Cell
+        cell_index: Dict[str, List[Any]] = {}
+        for tbl in tables:
+            for cell in tbl.cells:
+                key = cell.text.strip().lower()
+                if key:
+                    cell_index.setdefault(key, []).append(cell)
+
+        def _normalise(v: Any) -> str:
+            return str(v).strip().lower()
+
+        def _merge_bboxes(boxes: List[BoundingBox]) -> BoundingBox:
+            return BoundingBox(
+                x1=min(b.x1 for b in boxes),
+                y1=min(b.y1 for b in boxes),
+                x2=max(b.x2 for b in boxes),
+                y2=max(b.y2 for b in boxes),
+            )
+
+        def _find_bbox(value: Any) -> Optional[BoundingBox]:
+            """Try each strategy in priority order."""
+            norm = _normalise(value)
+            if not norm or norm in ("n/a", "none", "null", ""):
+                return None
+
+            # 1) Exact word match
+            if norm in word_index:
+                best = max(word_index[norm], key=lambda w: w.confidence)
+                return best.bbox
+
+            # 2) Exact line match
+            for tl in text_lines:
+                if tl.text.strip().lower() == norm:
+                    return tl.bbox
+
+            # 3) Substring / multi-word span inside a text line
+            for tl in text_lines:
+                line_lower = tl.text.lower()
+                if norm in line_lower and tl.words:
+                    # Find which words belong to the matching span
+                    start_idx = line_lower.index(norm)
+                    end_idx = start_idx + len(norm)
+                    span_boxes = []
+                    cursor = 0
+                    for w in tl.words:
+                        w_start = line_lower.find(w.text.lower(), cursor)
+                        if w_start == -1:
+                            continue
+                        w_end = w_start + len(w.text)
+                        # Word overlaps with the matched span
+                        if w_end > start_idx and w_start < end_idx:
+                            span_boxes.append(w.bbox)
+                        cursor = w_end
+                    if span_boxes:
+                        return _merge_bboxes(span_boxes)
+                    # Fallback: use the entire line bbox
+                    return tl.bbox
+
+            # 4) Table cell match
+            if norm in cell_index:
+                best_cell = cell_index[norm][0]
+                if best_cell.bbox:
+                    return best_cell.bbox
+
+            return None
+
+        anchored = 0
+        for field in fields:
+            if field.bbox is None and field.value is not None:
+                bbox = _find_bbox(field.value)
+                if bbox:
+                    field.bbox = bbox
+                    anchored += 1
+                    # Also update candidates from the same source
+                    for cand in field.candidates:
+                        if cand.bbox is None and cand.value == field.value:
+                            cand.bbox = bbox
+
+        if anchored:
+            logger.info(f"Spatial anchoring: attached bboxes to {anchored} fields")
+        return fields
+
     def _run_validators(self, fields: List[Field]) -> List[Field]:
         """Run validators on extracted fields."""
         from docvision.kie.validators import run_all_validators, validate_document_consistency
@@ -936,10 +1089,29 @@ class DocumentProcessor:
         # Document-level consistency checks
         consistency_results = validate_document_consistency(fields)
         
-        # Log any consistency issues
+        # Log any consistency issues AND attach to the first relevant field
+        # so they appear in the validation summary output
         for result in consistency_results:
             if not result.passed:
                 logger.warning(f"Consistency check failed: {result.message}")
+            
+            # Attach total_check to the total/total_amount field
+            if result.name == "total_check":
+                for f in fields:
+                    if f.name.lower() in ("total", "total_amount"):
+                        f.validators.append(result)
+                        if not result.passed:
+                            f.status = FieldStatus.VALIDATION_FAILED
+                        break
+            
+            # Attach date_order to the due_date field
+            elif result.name == "date_order":
+                for f in fields:
+                    if f.name.lower() == "due_date":
+                        f.validators.append(result)
+                        if not result.passed:
+                            f.status = FieldStatus.VALIDATION_FAILED
+                        break
         
         return fields
     
