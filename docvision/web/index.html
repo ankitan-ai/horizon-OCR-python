@@ -554,6 +554,7 @@ function renderOutput() {
       <button class="btn btn-secondary btn-sm" onclick="formatJson()">Format</button>
       <button class="btn btn-secondary btn-sm" onclick="collapseJson()">Collapse</button>
       <button class="btn btn-success btn-sm" onclick="saveEdits()">💾 Save Edits</button>
+      <button class="btn btn-primary btn-sm" onclick="saveToDisk()">📂 Save to Disk</button>
       <button class="btn btn-secondary btn-sm" onclick="downloadJson()">⬇ Download</button>
     </div>
     <textarea class="json-editor" id="jsonEditor" spellcheck="false">${escHtml(jsonStr)}</textarea>
@@ -648,6 +649,40 @@ function highlightJson() {
     // Scroll to selection
     const linesBefore = editor.value.substring(0, idx).split('\n').length;
     editor.scrollTop = linesBefore * 18 - 100;
+  }
+}
+
+async function saveToDisk() {
+  if (!currentJobId) return alert('No processed document to save');
+  // Save any pending edits first
+  const editor = $('#jsonEditor');
+  if (editor) {
+    try {
+      const obj = JSON.parse(editor.value);
+      await fetch(`/api/jobs/${currentJobId}/result`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(obj)
+      });
+      currentResult = obj;
+    } catch {
+      return alert('Fix JSON errors before saving to disk');
+    }
+  }
+  try {
+    const res = await fetch(`/api/jobs/${currentJobId}/save`, { method: 'POST' });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Save failed');
+    }
+    const data = await res.json();
+    const status = $('#jsonStatus');
+    if (status) {
+      status.textContent = `✓ Saved to ${data.path}`;
+      status.className = 'json-status valid';
+    }
+  } catch (e) {
+    alert('Failed to save: ' + e.message);
   }
 }
 

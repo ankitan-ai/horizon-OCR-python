@@ -141,6 +141,7 @@ async def process_document(
     _jobs[job_id] = {
         "status": "processing",
         "filename": file.filename,
+        "processing_mode": processing_mode,
         "created": datetime.utcnow().isoformat(),
         "result": None,
         "error": None,
@@ -242,6 +243,37 @@ async def download_json(job_id: str):
         content=job["result"],
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+# ---------------------------------------------------------------------------
+# API: save result to disk
+# ---------------------------------------------------------------------------
+OUTPUT_BASE = Path("output")
+
+
+@app.post("/api/jobs/{job_id}/save")
+async def save_to_disk(job_id: str):
+    """Save the current JSON result to the output/ folder on disk."""
+    if job_id not in _jobs:
+        raise HTTPException(404, "Job not found")
+    job = _jobs[job_id]
+    if job["result"] is None:
+        raise HTTPException(400, "No result to save")
+
+    mode = job.get("processing_mode", "local")
+    subfolder = "Azure_Cloud" if mode == "azure" else "Local"
+    out_dir = OUTPUT_BASE / subfolder
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    stem = Path(job["filename"]).stem
+    filename = f"{stem}_{job_id}.json"
+    filepath = out_dir / filename
+
+    with open(filepath, "w", encoding="utf-8") as f:
+        json.dump(job["result"], f, indent=2, ensure_ascii=False, default=str)
+
+    logger.info(f"Result saved to disk: {filepath}")
+    return {"ok": True, "path": str(filepath)}
 
 
 # ---------------------------------------------------------------------------
