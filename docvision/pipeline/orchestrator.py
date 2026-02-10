@@ -26,6 +26,7 @@ import numpy as np
 from loguru import logger
 
 from docvision.config import Config, load_config
+from docvision.io.markdown import save_markdown
 from docvision.types import (
     Document, Page, PageMetadata, Field, Table, TextLine,
     LayoutRegion, ProcessingResult, DocumentMetadata,
@@ -93,6 +94,9 @@ class DocumentProcessor:
         # Azure cloud providers (lazy)
         self._azure_di_provider = None
         self._gpt_vision_extractor = None
+
+        # Smart document classifier (lazy)
+        self._document_classifier = None
 
         # Azure cost tracking and response caching
         self._cost_tracker = None
@@ -272,7 +276,61 @@ class DocumentProcessor:
                 response_cache=self.response_cache,
             )
         return self._gpt_vision_extractor
-    
+
+    @property
+    def document_classifier(self):
+        """Lazy load smart document classifier."""
+        if self._document_classifier is None:
+            from docvision.azure.classifier import DocumentClassifier
+            self._document_classifier = DocumentClassifier(
+                self.config.azure,
+                cost_tracker=self.cost_tracker,
+            )
+        return self._document_classifier
+
+    # ── Smart routing ────────────────────────────────────────────────────
+
+    def _classify_and_route(
+        self,
+        first_page: "np.ndarray",
+        options: ProcessingOptions,
+    ) -> tuple:
+        """
+        Run GPT-nano classification on the first page and determine
+        the best GPT deployment and DI model for extraction.
+
+        Returns:
+            (document_type, gpt_deployment, di_model)
+        """
+        from docvision.azure.classifier import ClassificationResult
+
+        routing_cfg = self.config.smart_routing
+
+        # Skip classification if disabled or if user already specified a type
+        if not routing_cfg.enable:
+            return options.document_type, None, None
+
+        if routing_cfg.classify_on_auto_only and options.document_type != "auto":
+            return options.document_type, None, None
+
+        if not self.config.azure.is_openai_ready:
+            return options.document_type, None, None
+
+        logger.info("Running smart document classification (GPT-nano) …")
+        result: ClassificationResult = self.document_classifier.classify(first_page)
+
+        doc_type = result.document_type
+        gpt_deploy = result.recommended_gpt_deployment
+        di_model = result.recommended_di_model
+
+        # Fall back to defaults when classifier returns nothing useful
+        if doc_type == "auto":
+            doc_type = options.document_type
+        if not gpt_deploy:
+            gpt_deploy = routing_cfg.default_gpt_deployment
+
+        return doc_type, gpt_deploy, di_model
+
     def process(
         self,
         input_path: str,
@@ -297,6 +355,8 @@ class DocumentProcessor:
         try:
             # Determine file type and load
             path = Path(input_path)
+            # Use input filename stem as the folder / label for artifacts
+            file_label = path.stem
             
             if not path.exists():
                 return ProcessingResult(
@@ -325,6 +385,20 @@ class DocumentProcessor:
             if options.save_artifacts and self.config.artifacts.enable:
                 self.artifact_manager.current_mode = options.processing_mode
 
+            # ── Smart classification (Azure mode only) ───────────────
+            gpt_deployment_override = None
+            if options.processing_mode == "azure" and page_images:
+                doc_type, gpt_deploy, di_model = self._classify_and_route(
+                    page_images[0], options
+                )
+                if doc_type and doc_type != "auto":
+                    options.document_type = doc_type
+                if gpt_deploy:
+                    gpt_deployment_override = gpt_deploy
+                if di_model:
+                    # Temporarily override DI model for this request
+                    self.config.azure.doc_intelligence_model = di_model
+
             # ── Azure batch optimisation: send entire PDF in one DI call ──
             if (
                 options.processing_mode == "azure"
@@ -332,7 +406,9 @@ class DocumentProcessor:
                 and len(page_images) > 1
             ):
                 return self._process_pdf_azure_batch(
-                    path, page_images, doc_id, options, start_time
+                    path, page_images, doc_id, options, start_time,
+                    file_label=file_label,
+                    gpt_deployment_override=gpt_deployment_override,
                 )
             
             for page_num, page_image in enumerate(page_images, start=1):
@@ -341,8 +417,9 @@ class DocumentProcessor:
                 page_result = self._process_page(
                     page_image,
                     page_num,
-                    doc_id,
-                    options
+                    file_label,
+                    options,
+                    gpt_deployment_override=gpt_deployment_override,
                 )
                 
                 pages.append(page_result["page"])
@@ -382,7 +459,7 @@ class DocumentProcessor:
             
             # Generate artifact summary
             if options.save_artifacts and self.config.artifacts.enable:
-                self.artifact_manager.generate_summary_html(document, doc_id)
+                self.artifact_manager.generate_summary_html(document, file_label)
             
             logger.info(f"Document processed successfully in {processing_time:.2f}s")
             
@@ -416,12 +493,16 @@ class DocumentProcessor:
         image: np.ndarray,
         page_num: int,
         doc_id: str,
-        options: ProcessingOptions
+        options: ProcessingOptions,
+        gpt_deployment_override: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Process a single page."""
         # Route to Azure cloud pipeline when mode is "azure"
         if options.processing_mode == "azure":
-            return self._process_page_azure(image, page_num, doc_id, options)
+            return self._process_page_azure(
+                image, page_num, doc_id, options,
+                gpt_deployment_override=gpt_deployment_override,
+            )
 
         h, w = image.shape[:2]
         
@@ -562,6 +643,8 @@ class DocumentProcessor:
         doc_id: str,
         options: ProcessingOptions,
         start_time: float,
+        file_label: Optional[str] = None,
+        gpt_deployment_override: Optional[str] = None,
     ) -> ProcessingResult:
         """
         Process a multi-page PDF in a single Azure DI call.
@@ -576,6 +659,7 @@ class DocumentProcessor:
         )
 
         pdf_bytes = pdf_path.read_bytes()
+        artifact_label = file_label or pdf_path.stem
         # Pass pixel dimensions of each rasterised page so Azure DI can
         # scale inch-based PDF coordinates into pixel space.
         pixel_dims = [(img.shape[1], img.shape[0]) for img in page_images]
@@ -611,19 +695,19 @@ class DocumentProcessor:
                 # Save the original page image as "preprocessed" so Azure
                 # produces the same artifact set as the local pipeline.
                 self.artifact_manager.save_preprocessed_image(
-                    page_image, doc_id, page_num, "preprocessed"
+                    page_image, artifact_label, page_num, "preprocessed"
                 )
                 self.artifact_manager.save_layout_overlay(
-                    page_image, layout_regions, doc_id, page_num
+                    page_image, layout_regions, artifact_label, page_num
                 )
                 self.artifact_manager.save_text_polygons_overlay(
-                    page_image, text_lines, doc_id, page_num
+                    page_image, text_lines, artifact_label, page_num
                 )
                 self.artifact_manager.save_table_structure_overlay(
-                    page_image, tables, doc_id, page_num
+                    page_image, tables, artifact_label, page_num
                 )
                 self.artifact_manager.save_ocr_overlay(
-                    page_image, text_lines, doc_id, page_num
+                    page_image, text_lines, artifact_label, page_num
                 )
 
             # GPT Vision KIE (still per-page — GPT needs images)
@@ -634,6 +718,7 @@ class DocumentProcessor:
                     page_num=page_num,
                     ocr_text=raw_text,
                     document_type=options.document_type,
+                    deployment_override=gpt_deployment_override,
                 )
 
             page = Page(
@@ -688,7 +773,7 @@ class DocumentProcessor:
 
         # Generate artifact summary
         if options.save_artifacts and self.config.artifacts.enable:
-            self.artifact_manager.generate_summary_html(document, doc_id)
+            self.artifact_manager.generate_summary_html(document, artifact_label)
 
         logger.info(
             f"Batch document processed successfully in {processing_time:.2f}s "
@@ -703,6 +788,7 @@ class DocumentProcessor:
         page_num: int,
         doc_id: str,
         options: ProcessingOptions,
+        gpt_deployment_override: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Process a single page using Azure cloud APIs."""
         h, w = image.shape[:2]
@@ -744,6 +830,7 @@ class DocumentProcessor:
                 page_num=page_num,
                 ocr_text=raw_text,
                 document_type=options.document_type,
+                deployment_override=gpt_deployment_override,
             )
 
         # ── Build page object ───────────────────────────────────────
@@ -882,14 +969,15 @@ class DocumentProcessor:
         )
     
     def _save_output(self, document: Document, output_dir: str, processing_mode: str = "local") -> str:
-        """Save document to JSON file."""
+        """Save document to JSON file and Markdown report."""
         output_path = Path(output_dir)
         # Route into Local/ or Azure_Cloud/ subfolder
         subfolder = "Azure_Cloud" if processing_mode == "azure" else "Local"
         output_path = output_path / subfolder
         output_path.mkdir(parents=True, exist_ok=True)
         
-        filename = f"{document.metadata.filename}_{document.id}.json"
+        stem = Path(document.metadata.filename).stem
+        filename = f"{stem}.json"
         filepath = output_path / filename
         
         # Convert to dict and serialize
@@ -902,6 +990,18 @@ class DocumentProcessor:
                 json.dump(data, f, ensure_ascii=False, default=str)
         
         logger.info(f"Output saved to: {filepath}")
+
+        # Generate Markdown report alongside JSON
+        if getattr(self.config, 'markdown', None) is None or self.config.markdown.enable:
+            md_dir = getattr(self.config, 'markdown', None)
+            md_base = md_dir.dir if md_dir else "markdown"
+            save_markdown(
+                data=data,
+                output_dir=md_base,
+                processing_mode=processing_mode,
+                filename_stem=document.metadata.filename,
+            )
+
         return str(filepath)
     
     def process_batch(

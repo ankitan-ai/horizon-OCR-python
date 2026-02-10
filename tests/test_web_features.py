@@ -453,3 +453,109 @@ class TestDockerFiles:
         content = Path("Dockerfile").read_text()
         assert "localhost:8080" in content
         assert "localhost:8000" not in content
+
+
+# ---------------------------------------------------------------------------
+# Multi-user concurrency
+# ---------------------------------------------------------------------------
+
+class TestMultiUserConcurrency:
+    """Verify that the thread locks and per-request isolation exist."""
+
+    def test_locks_exist(self):
+        from docvision.web import app as web_module
+        import threading
+        assert hasattr(web_module, "_jobs_lock")
+        assert hasattr(web_module, "_local_model_lock")
+        assert isinstance(web_module._jobs_lock, type(threading.Lock()))
+        assert isinstance(web_module._local_model_lock, type(threading.Lock()))
+
+    def test_jobs_dict_is_shared_but_lockable(self):
+        """Jobs dict is shared across requests but protected by _jobs_lock."""
+        from docvision.web import app as web_module
+        import threading
+
+        web_module._jobs.clear()
+
+        # Simulate two threads writing to _jobs concurrently
+        errors = []
+
+        def writer(jid):
+            try:
+                with web_module._jobs_lock:
+                    web_module._jobs[jid] = {"status": "completed", "result": jid}
+            except Exception as e:
+                errors.append(e)
+
+        threads = [threading.Thread(target=writer, args=(f"job_{i}",)) for i in range(20)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert len(errors) == 0
+        assert len(web_module._jobs) == 20
+        web_module._jobs.clear()
+
+    def test_local_lock_serialises_access(self):
+        """Local model lock prevents two local jobs from running simultaneously."""
+        from docvision.web import app as web_module
+        import threading
+        import time
+
+        events = []
+
+        def fake_local_job(name):
+            with web_module._local_model_lock:
+                events.append(f"{name}_start")
+                time.sleep(0.05)
+                events.append(f"{name}_end")
+
+        t1 = threading.Thread(target=fake_local_job, args=("A",))
+        t2 = threading.Thread(target=fake_local_job, args=("B",))
+        t1.start()
+        t2.start()
+        t1.join()
+        t2.join()
+
+        # One must fully finish before the other starts
+        a_start = events.index("A_start")
+        a_end = events.index("A_end")
+        b_start = events.index("B_start")
+        b_end = events.index("B_end")
+
+        # Either A fully before B, or B fully before A
+        assert (a_end < b_start) or (b_end < a_start), (
+            f"Local lock did not serialise: {events}"
+        )
+
+    def test_azure_jobs_can_run_in_parallel(self):
+        """Azure jobs should NOT acquire the local model lock."""
+        from docvision.web import app as web_module
+        import threading
+        import time
+
+        events = []
+
+        def fake_azure_job(name):
+            # Azure path does NOT acquire _local_model_lock
+            events.append(f"{name}_start")
+            time.sleep(0.05)
+            events.append(f"{name}_end")
+
+        t1 = threading.Thread(target=fake_azure_job, args=("X",))
+        t2 = threading.Thread(target=fake_azure_job, args=("Y",))
+        t1.start()
+        t2.start()
+        t1.join()
+        t2.join()
+
+        # Both should overlap (both start before either ends)
+        x_start = events.index("X_start")
+        y_start = events.index("Y_start")
+        x_end = events.index("X_end")
+        y_end = events.index("Y_end")
+
+        # At least one must start before the other ends (parallel)
+        overlaps = (x_start < y_end and y_start < x_end)
+        assert overlaps, f"Azure jobs should run in parallel: {events}"

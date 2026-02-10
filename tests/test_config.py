@@ -14,7 +14,7 @@ class TestConfig:
         config = Config()
         
         assert config.runtime.device == "auto"
-        assert config.pdf.dpi == 350  # Higher DPI for better accuracy
+        assert config.pdf.dpi == 500  # Higher DPI for better accuracy
         assert config.output.dir == "output"
     
     def test_get_device_cpu(self):

@@ -40,7 +40,7 @@ class AzureConfig:
     use_gpt_vision_kie: bool = True       # Whether to use GPT-4o for field extraction
 
     # GPT-4o structured extraction settings
-    gpt_max_tokens: int = 4096
+    gpt_max_tokens: int = 16384
     gpt_temperature: float = 0.0          # Deterministic for extraction
     document_type: str = "auto"           # auto, bol, invoice, receipt, delivery_ticket
 
@@ -99,7 +99,7 @@ class RuntimeConfig:
 @dataclass
 class PDFConfig:
     """PDF processing configuration."""
-    dpi: int = 350  # Rasterization DPI (300-400 recommended for accuracy)
+    dpi: int = 500  # Rasterization DPI (high for maximum accuracy)
     max_pages: Optional[int] = None  # None means process all pages
 
 
@@ -131,8 +131,8 @@ class ModelsConfig:
     trocr_handwritten: str = "models/trocr-base-handwritten"
     
     # KIE models
-    donut: str = "naver-clova-ix/donut-base-finetuned-cord-v2"
-    layoutlmv3: str = "microsoft/layoutlmv3-base"
+    donut: str = "models/invoice-and-receipts-donut-v1"
+    layoutlmv3: str = "models/layoutlmv3-base"
 
 
 @dataclass
@@ -154,7 +154,7 @@ class ThresholdsConfig:
     # OCR confidence thresholds
     trocr_min_conf: float = 0.75
     tesseract_min_conf: float = 0.70
-    reroute_to_tesseract_below: float = 0.80
+    reroute_to_tesseract_below: float = 0.60
     
     # Handwriting detection threshold
     handwriting_detection_conf: float = 0.6
@@ -198,6 +198,22 @@ class OutputConfig:
 
 
 @dataclass
+class MarkdownConfig:
+    """Markdown report generation configuration."""
+    enable: bool = True
+    dir: str = "markdown"
+
+
+@dataclass
+class SmartRoutingConfig:
+    """Smart document classification and model routing."""
+    enable: bool = True                     # Enable smart classifier before extraction
+    classifier_deployment: str = "gpt-5-nano"  # Cheap model used only for classification
+    default_gpt_deployment: str = "gpt-4o-mini"  # Default extraction model
+    classify_on_auto_only: bool = True      # Only classify when document_type == "auto"
+
+
+@dataclass
 class Config:
     """Main configuration container."""
     runtime: RuntimeConfig = field(default_factory=RuntimeConfig)
@@ -209,7 +225,9 @@ class Config:
     validators: ValidatorsConfig = field(default_factory=ValidatorsConfig)
     artifacts: ArtifactsConfig = field(default_factory=ArtifactsConfig)
     output: OutputConfig = field(default_factory=OutputConfig)
+    markdown: MarkdownConfig = field(default_factory=MarkdownConfig)
     azure: AzureConfig = field(default_factory=AzureConfig)
+    smart_routing: SmartRoutingConfig = field(default_factory=SmartRoutingConfig)
     
     @classmethod
     def from_dict(cls, data: dict) -> "Config":
@@ -234,8 +252,12 @@ class Config:
             config.artifacts = ArtifactsConfig(**data["artifacts"])
         if "output" in data:
             config.output = OutputConfig(**data["output"])
+        if "markdown" in data:
+            config.markdown = MarkdownConfig(**data["markdown"])
         if "azure" in data:
             config.azure = AzureConfig(**data["azure"])
+        if "smart_routing" in data:
+            config.smart_routing = SmartRoutingConfig(**data["smart_routing"])
         
         return config
 

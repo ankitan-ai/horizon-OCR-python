@@ -16,6 +16,7 @@ import hashlib
 import tempfile
 import asyncio
 import shutil
+import threading
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 from datetime import datetime
@@ -28,6 +29,7 @@ from fastapi.staticfiles import StaticFiles
 from loguru import logger
 
 from docvision import __version__
+from docvision.io.markdown import generate_markdown, save_markdown
 from docvision.config import load_config, Config
 from docvision.pipeline import DocumentProcessor, ProcessingOptions
 
@@ -37,6 +39,8 @@ from docvision.pipeline import DocumentProcessor, ProcessingOptions
 # ---------------------------------------------------------------------------
 _processor: Optional[DocumentProcessor] = None
 _jobs: Dict[str, Dict[str, Any]] = {}
+_jobs_lock = threading.Lock()           # protects _jobs dict mutations
+_local_model_lock = threading.Lock()    # serialises local-model inference
 
 WEB_DIR = Path(__file__).parent
 STATIC_DIR = WEB_DIR / "static"
@@ -152,6 +156,10 @@ async def process_document(
     import concurrent.futures
     loop = asyncio.get_event_loop()
 
+    def _update_job(jid, **kwargs):
+        with _jobs_lock:
+            _jobs[jid].update(kwargs)
+
     async def _run():
         try:
             opts = ProcessingOptions(
@@ -168,28 +176,37 @@ async def process_document(
                 save_artifacts=True,
                 save_json=False,
             )
+
+            def _do_process():
+                # Local models share weights — serialise access.
+                # Azure requests are pure HTTP and can run in parallel.
+                uses_local = processing_mode in ("local", "hybrid")
+                if uses_local:
+                    with _local_model_lock:
+                        return _processor.process(str(upload_path), opts)
+                return _processor.process(str(upload_path), opts)
+
             with concurrent.futures.ThreadPoolExecutor() as pool:
-                result = await loop.run_in_executor(
-                    pool,
-                    lambda: _processor.process(str(upload_path), opts),
-                )
+                result = await loop.run_in_executor(pool, _do_process)
+
             if result.success:
                 doc_dict = result.document.model_dump(mode="json")
-                _jobs[job_id]["status"] = "completed"
-                _jobs[job_id]["result"] = doc_dict
-                _jobs[job_id]["artifacts_dir"] = str(
-                    ARTIFACTS_BASE / mode_subfolder / result.document.id
+                _update_job(
+                    job_id,
+                    status="completed",
+                    result=doc_dict,
+                    artifacts_dir=str(
+                        ARTIFACTS_BASE / mode_subfolder / Path(result.document.metadata.filename).stem
+                    ),
                 )
                 # Log cost summary after Azure processing
                 if processing_mode == "azure":
                     _processor.print_cost_summary()
             else:
-                _jobs[job_id]["status"] = "failed"
-                _jobs[job_id]["error"] = result.error
+                _update_job(job_id, status="failed", error=result.error)
         except Exception as exc:
             logger.exception("Processing failed")
-            _jobs[job_id]["status"] = "failed"
-            _jobs[job_id]["error"] = str(exc)
+            _update_job(job_id, status="failed", error=str(exc))
 
     asyncio.ensure_future(_run())
     return {"job_id": job_id}
@@ -249,8 +266,12 @@ async def process_batch(
         _jid = job_id
         _msub = mode_subfolder
 
+        def _update_job_batch(jid, **kwargs):
+            with _jobs_lock:
+                _jobs[jid].update(kwargs)
+
         async def _run_batch(jid=_jid, upath=_upload_path, mode=_mode, dtype=_dtype, msub=_msub):
-            _jobs[jid]["status"] = "processing"
+            _update_job_batch(jid, status="processing")
             try:
                 opts = ProcessingOptions(
                     processing_mode=mode,
@@ -258,25 +279,32 @@ async def process_batch(
                     save_artifacts=True,
                     save_json=False,
                 )
+
+                def _do_process():
+                    uses_local = mode in ("local", "hybrid")
+                    if uses_local:
+                        with _local_model_lock:
+                            return _processor.process(upath, opts)
+                    return _processor.process(upath, opts)
+
                 with concurrent.futures.ThreadPoolExecutor() as pool:
-                    result = await loop.run_in_executor(
-                        pool,
-                        lambda: _processor.process(upath, opts),
-                    )
+                    result = await loop.run_in_executor(pool, _do_process)
+
                 if result.success:
                     doc_dict = result.document.model_dump(mode="json")
-                    _jobs[jid]["status"] = "completed"
-                    _jobs[jid]["result"] = doc_dict
-                    _jobs[jid]["artifacts_dir"] = str(
-                        ARTIFACTS_BASE / msub / result.document.id
+                    _update_job_batch(
+                        jid,
+                        status="completed",
+                        result=doc_dict,
+                        artifacts_dir=str(
+                            ARTIFACTS_BASE / msub / Path(result.document.metadata.filename).stem
+                        ),
                     )
                 else:
-                    _jobs[jid]["status"] = "failed"
-                    _jobs[jid]["error"] = result.error
+                    _update_job_batch(jid, status="failed", error=result.error)
             except Exception as exc:
                 logger.exception(f"Batch processing failed for {jid}")
-                _jobs[jid]["status"] = "failed"
-                _jobs[jid]["error"] = str(exc)
+                _update_job_batch(jid, status="failed", error=str(exc))
 
         asyncio.ensure_future(_run_batch())
 
@@ -444,14 +472,39 @@ async def save_to_disk(job_id: str):
     out_dir.mkdir(parents=True, exist_ok=True)
 
     stem = Path(job["filename"]).stem
-    filename = f"{stem}_{job_id}.json"
+    filename = f"{stem}.json"
     filepath = out_dir / filename
 
     with open(filepath, "w", encoding="utf-8") as f:
         json.dump(job["result"], f, indent=2, ensure_ascii=False, default=str)
 
+    # Also generate Markdown report
+    md_path = save_markdown(
+        data=job["result"],
+        output_dir="markdown",
+        processing_mode=mode,
+        filename_stem=stem,
+    )
+
     logger.info(f"Result saved to disk: {filepath}")
-    return {"ok": True, "path": str(filepath)}
+    logger.info(f"Markdown report saved: {md_path}")
+    return {"ok": True, "path": str(filepath), "markdown_path": md_path}
+
+
+@app.get("/api/jobs/{job_id}/download/markdown")
+async def download_markdown(job_id: str):
+    """Download the OCR result as a Markdown report."""
+    if job_id not in _jobs or _jobs[job_id]["result"] is None:
+        raise HTTPException(404, "No result")
+    job = _jobs[job_id]
+    md_content = generate_markdown(job["result"])
+    filename = Path(job["filename"]).stem + "_report.md"
+    from fastapi.responses import Response
+    return Response(
+        content=md_content,
+        media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -834,7 +834,8 @@ function renderOutput() {
     <div class="editor-toolbar">
       <button class="btn btn-success btn-sm" onclick="saveAllEdits()">💾 Save Edits</button>
       <button class="btn btn-primary btn-sm" onclick="saveToDisk()">📂 Save to Disk</button>
-      <button class="btn btn-secondary btn-sm" onclick="downloadJson()">⬇ Download</button>
+      <button class="btn btn-secondary btn-sm" onclick="downloadJson()">⬇ JSON</button>
+      <button class="btn btn-secondary btn-sm" onclick="downloadMarkdown()" style="background:#4a9eff">📝 Markdown</button>
     </div>`;
 
   html += outputView === 'fields' ? renderFieldEditor() : renderJsonEditor();
@@ -1020,6 +1021,21 @@ function downloadJson() {
   const a = document.createElement('a'); a.href = url;
   a.download = (currentResult?.metadata?.filename || 'document').replace(/\.[^.]+$/, '') + '_result.json';
   a.click(); URL.revokeObjectURL(url);
+}
+
+async function downloadMarkdown() {
+  if (!currentJobId) return alert('No processed document');
+  try {
+    const res = await fetch(`/api/jobs/${currentJobId}/download/markdown`);
+    if (!res.ok) throw new Error('Download failed');
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = (currentResult?.metadata?.filename || 'document').replace(/\.[^.]+$/, '') + '_report.md';
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) { alert('Markdown download failed: ' + e.message); }
 }
 
 async function saveToDisk() {

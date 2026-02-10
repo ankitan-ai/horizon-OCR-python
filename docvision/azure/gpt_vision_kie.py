@@ -140,21 +140,26 @@ class GPTVisionExtractor:
         page_num: int = 1,
         ocr_text: Optional[str] = None,
         document_type: Optional[str] = None,
+        deployment_override: Optional[str] = None,
     ) -> List[Field]:
         """
         Extract key fields from a document page image using GPT Vision.
 
         Args:
-            image:          BGR or RGB numpy array (H×W×3).
-            page_num:       1-based page number.
-            ocr_text:       Optional pre-extracted OCR text to include in prompt.
-            document_type:  Document type hint (``auto``, ``bol``, ``invoice``, …).
-                            Overrides ``AzureConfig.document_type`` if given.
+            image:              BGR or RGB numpy array (H×W×3).
+            page_num:           1-based page number.
+            ocr_text:           Optional pre-extracted OCR text to include in prompt.
+            document_type:      Document type hint (``auto``, ``bol``, ``invoice``, …).
+                                Overrides ``AzureConfig.document_type`` if given.
+            deployment_override: GPT deployment name to use for this call only.
+                                 When set by the smart classifier, this overrides
+                                 ``AzureConfig.openai_deployment``.
 
         Returns:
             ``List[Field]`` ready for the rank-and-fuse pipeline.
         """
         doc_type = document_type or self._config.document_type or "auto"
+        deployment = deployment_override or self._config.openai_deployment
 
         # ── Check cache ─────────────────────────────────────────────
         cache_key = None
@@ -163,7 +168,7 @@ class GPTVisionExtractor:
             cache_key = self.cache.make_key(
                 image_bytes,
                 service="gpt",
-                model=self._config.openai_deployment,
+                model=deployment,
                 extra=doc_type,
             )
             cached = self.cache.get(cache_key)
@@ -174,7 +179,7 @@ class GPTVisionExtractor:
                 fields = self._dict_to_fields(cached, page_num)
                 if self.cost_tracker:
                     self.cost_tracker.record_gpt_call(
-                        deployment=self._config.openai_deployment,
+                        deployment=deployment,
                         latency=0.0, cached=True,
                     )
                 return fields
@@ -184,11 +189,11 @@ class GPTVisionExtractor:
         t0 = time.perf_counter()
         logger.info(
             f"Sending page {page_num} to GPT Vision KIE "
-            f"(deployment={self._config.openai_deployment}, type={doc_type})"
+            f"(deployment={deployment}, type={doc_type})"
         )
 
         response = self.client.chat.completions.create(
-            model=self._config.openai_deployment,
+            model=deployment,
             messages=messages,
             max_tokens=self._config.gpt_max_tokens,
             temperature=self._config.gpt_temperature,
@@ -212,7 +217,7 @@ class GPTVisionExtractor:
             self.cost_tracker.record_gpt_call(
                 prompt_tokens=prompt_tokens,
                 completion_tokens=completion_tokens,
-                deployment=self._config.openai_deployment,
+                deployment=deployment,
                 latency=elapsed,
             )
 
