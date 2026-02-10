@@ -163,9 +163,15 @@ class AzureDocIntelligenceProvider:
         # Azure returns all pages; we sent a single image → page index 0
         azure_page = result.pages[0] if result.pages else None
 
-        text_lines = self._map_text_lines(azure_page, w, h)
-        tables = self._map_tables(result.tables, page_num, w, h)
-        layout_regions = self._map_layout_regions(result.paragraphs, w, h)
+        # Use Azure's reported page dimensions as source coordinate space,
+        # and the actual image pixel dimensions as target for scaling.
+        azure_pw = float(azure_page.width) if azure_page and azure_page.width else float(w)
+        azure_ph = float(azure_page.height) if azure_page and azure_page.height else float(h)
+        tw, th = float(w), float(h)
+
+        text_lines = self._map_text_lines(azure_page, azure_pw, azure_ph, tw, th)
+        tables = self._map_tables(result.tables, page_num, azure_pw, azure_ph, tw, th)
+        layout_regions = self._map_layout_regions(result.paragraphs, azure_pw, azure_ph, tw, th)
         raw_text = result.content or ""
 
         logger.info(
@@ -201,6 +207,7 @@ class AzureDocIntelligenceProvider:
         self,
         file_bytes: bytes,
         page_num: int = 1,
+        pixel_dimensions: Optional[List[Tuple[int, int]]] = None,
     ) -> Dict[str, Any]:
         """
         Analyse a document from raw file bytes (PDF or image).
@@ -251,17 +258,29 @@ class AzureDocIntelligenceProvider:
             pw = azure_page.width or 1
             ph = azure_page.height or 1
 
-            text_lines = self._map_text_lines(azure_page, pw, ph)
+            # When pixel_dimensions are provided (e.g. from rasterised PDF pages),
+            # use them as target so coordinates are scaled from Azure's unit
+            # space (inches for PDFs) into actual pixel space.
+            if pixel_dimensions and idx < len(pixel_dimensions):
+                tw, th = float(pixel_dimensions[idx][0]), float(pixel_dimensions[idx][1])
+            else:
+                tw, th = None, None
+
+            text_lines = self._map_text_lines(azure_page, pw, ph, tw, th)
             tables = self._map_tables(
                 self._tables_for_page(result.tables, idx + 1),
                 idx + 1,
                 pw,
                 ph,
+                tw,
+                th,
             )
             layout_regions = self._map_layout_regions(
                 self._paragraphs_for_page(result.paragraphs, idx + 1),
                 pw,
                 ph,
+                tw,
+                th,
             )
 
             all_results.append(
@@ -270,8 +289,8 @@ class AzureDocIntelligenceProvider:
                     "tables": tables,
                     "layout_regions": layout_regions,
                     "raw_text": result.content or "",
-                    "page_width": pw,
-                    "page_height": ph,
+                    "page_width": tw or pw,
+                    "page_height": th or ph,
                 }
             )
 
@@ -315,6 +334,8 @@ class AzureDocIntelligenceProvider:
         azure_page,
         page_w: float,
         page_h: float,
+        target_w: Optional[float] = None,
+        target_h: Optional[float] = None,
     ) -> List[TextLine]:
         """Map Azure ``DocumentPage.lines`` + ``words`` → ``List[TextLine]``."""
         if azure_page is None:
@@ -329,11 +350,11 @@ class AzureDocIntelligenceProvider:
         text_lines: List[TextLine] = []
 
         for line in azure_page.lines or []:
-            poly = self._polygon_from_flat(line.polygon, page_w, page_h)
+            poly = self._polygon_from_flat(line.polygon, page_w, page_h, target_w, target_h)
             bbox = poly.bounding_box if poly else BoundingBox(x1=0, y1=0, x2=1, y2=1)
 
             # Collect words that fall within this line's span
-            words = self._words_for_line(line, azure_page.words or [], page_w, page_h)
+            words = self._words_for_line(line, azure_page.words or [], page_w, page_h, target_w, target_h)
 
             # Line confidence = average word confidence
             confidences = [wd.confidence for wd in words] if words else [0.9]
@@ -359,6 +380,8 @@ class AzureDocIntelligenceProvider:
         all_words,
         page_w: float,
         page_h: float,
+        target_w: Optional[float] = None,
+        target_h: Optional[float] = None,
     ) -> List[Word]:
         """Find Azure ``DocumentWord`` objects that belong to a given line."""
         if not line.spans:
@@ -370,7 +393,7 @@ class AzureDocIntelligenceProvider:
         matched: List[Word] = []
         for w in all_words:
             if w.span and line_start <= w.span.offset < line_end:
-                poly = self._polygon_from_flat(w.polygon, page_w, page_h)
+                poly = self._polygon_from_flat(w.polygon, page_w, page_h, target_w, target_h)
                 bbox = poly.bounding_box if poly else BoundingBox(x1=0, y1=0, x2=1, y2=1)
 
                 matched.append(
@@ -393,6 +416,8 @@ class AzureDocIntelligenceProvider:
         page_num: int,
         page_w: float,
         page_h: float,
+        target_w: Optional[float] = None,
+        target_h: Optional[float] = None,
     ) -> List[Table]:
         """Map Azure ``DocumentTable`` list → ``List[Table]``."""
         if not azure_tables:
@@ -402,12 +427,12 @@ class AzureDocIntelligenceProvider:
 
         for at in azure_tables:
             # Table bounding box from bounding_regions
-            bbox = self._bbox_from_regions(at.bounding_regions, page_w, page_h)
+            bbox = self._bbox_from_regions(at.bounding_regions, page_w, page_h, target_w, target_h)
 
             cells: List[Cell] = []
             for ac in at.cells or []:
                 cell_bbox = self._bbox_from_regions(
-                    ac.bounding_regions, page_w, page_h
+                    ac.bounding_regions, page_w, page_h, target_w, target_h
                 )
                 is_header = (ac.kind or "").lower() in (
                     "columnheader",
@@ -449,6 +474,8 @@ class AzureDocIntelligenceProvider:
         paragraphs: Optional[list],
         page_w: float,
         page_h: float,
+        target_w: Optional[float] = None,
+        target_h: Optional[float] = None,
     ) -> List[LayoutRegion]:
         """Map Azure ``DocumentParagraph`` list → ``List[LayoutRegion]``."""
         if not paragraphs:
@@ -459,7 +486,7 @@ class AzureDocIntelligenceProvider:
         for para in paragraphs:
             role = (para.role or "").strip()
             region_type = _ROLE_MAP.get(role, LayoutRegionType.TEXT)
-            bbox = self._bbox_from_regions(para.bounding_regions, page_w, page_h)
+            bbox = self._bbox_from_regions(para.bounding_regions, page_w, page_h, target_w, target_h)
 
             regions.append(
                 LayoutRegion(
@@ -488,20 +515,27 @@ class AzureDocIntelligenceProvider:
         flat: Optional[list],
         page_w: float,
         page_h: float,
+        target_w: Optional[float] = None,
+        target_h: Optional[float] = None,
     ) -> Optional[Polygon]:
         """
         Convert Azure's flat [x1,y1,x2,y2,…] polygon to DocVision ``Polygon``.
 
         Azure DI returns coordinates in the page's unit space (inches for PDFs,
-        pixels for images).  For images the page width/height already matches,
-        so we keep coordinates as-is.  For PDFs (unit == "inch") we'd need to
-        scale; in practice the orchestrator sends rasterised images so this is
-        fine.
+        pixels for images).  When ``target_w`` / ``target_h`` are supplied and
+        differ from ``page_w`` / ``page_h``, the coordinates are scaled from
+        Azure's unit space into pixel space.
         """
         if not flat or len(flat) < 4:
             return None
 
-        points = [(flat[i], flat[i + 1]) for i in range(0, len(flat), 2)]
+        sx = (target_w / page_w) if (target_w and page_w) else 1.0
+        sy = (target_h / page_h) if (target_h and page_h) else 1.0
+
+        points = [
+            (flat[i] * sx, flat[i + 1] * sy)
+            for i in range(0, len(flat), 2)
+        ]
         return Polygon(points=points)
 
     @staticmethod
@@ -509,8 +543,15 @@ class AzureDocIntelligenceProvider:
         regions: Optional[list],
         page_w: float,
         page_h: float,
+        target_w: Optional[float] = None,
+        target_h: Optional[float] = None,
     ) -> BoundingBox:
-        """Extract a BoundingBox from Azure ``bounding_regions``."""
+        """Extract a BoundingBox from Azure ``bounding_regions``.
+
+        When *target_w* / *target_h* are given and differ from *page_w* /
+        *page_h*, coordinates are scaled from Azure's unit space (inches for
+        PDFs) into pixel space.
+        """
         if not regions:
             return BoundingBox(x1=0, y1=0, x2=1, y2=1)
 
@@ -520,8 +561,11 @@ class AzureDocIntelligenceProvider:
         if not poly or len(poly) < 4:
             return BoundingBox(x1=0, y1=0, x2=1, y2=1)
 
-        xs = [poly[i] for i in range(0, len(poly), 2)]
-        ys = [poly[i + 1] for i in range(0, len(poly), 2)]
+        sx = (target_w / page_w) if (target_w and page_w) else 1.0
+        sy = (target_h / page_h) if (target_h and page_h) else 1.0
+
+        xs = [poly[i] * sx for i in range(0, len(poly), 2)]
+        ys = [poly[i + 1] * sy for i in range(0, len(poly), 2)]
 
         return BoundingBox(
             x1=min(xs),

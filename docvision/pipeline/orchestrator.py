@@ -576,7 +576,12 @@ class DocumentProcessor:
         )
 
         pdf_bytes = pdf_path.read_bytes()
-        batch_result = self.azure_di_provider.analyze_bytes(pdf_bytes)
+        # Pass pixel dimensions of each rasterised page so Azure DI can
+        # scale inch-based PDF coordinates into pixel space.
+        pixel_dims = [(img.shape[1], img.shape[0]) for img in page_images]
+        batch_result = self.azure_di_provider.analyze_bytes(
+            pdf_bytes, pixel_dimensions=pixel_dims
+        )
 
         # analyze_bytes returns {"pages": [...]} for multi-page, or a single dict
         if "pages" in batch_result:
@@ -603,6 +608,11 @@ class DocumentProcessor:
 
             # Save artifacts
             if options.save_artifacts:
+                # Save the original page image as "preprocessed" so Azure
+                # produces the same artifact set as the local pipeline.
+                self.artifact_manager.save_preprocessed_image(
+                    page_image, doc_id, page_num, "preprocessed"
+                )
                 self.artifact_manager.save_layout_overlay(
                     page_image, layout_regions, doc_id, page_num
                 )
@@ -708,6 +718,11 @@ class DocumentProcessor:
 
         # ── Save artifacts (same overlays as local pipeline) ────────
         if options.save_artifacts:
+            # Save the original page image as "preprocessed" so Azure
+            # produces the same artifact set as the local pipeline.
+            self.artifact_manager.save_preprocessed_image(
+                image, doc_id, page_num, "preprocessed"
+            )
             self.artifact_manager.save_layout_overlay(
                 image, layout_regions, doc_id, page_num
             )
