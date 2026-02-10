@@ -1,6 +1,6 @@
 # 🔎 DocVision OCR Report — `test_invoice.png`
 
-> Generated on 2026-02-10 18:01:57 UTC
+> Generated on 2026-02-10 19:10:19 UTC
 
 ---
 

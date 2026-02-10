@@ -35,47 +35,107 @@ from docvision.types import (
 
 _SYSTEM_PROMPT = """\
 You are a document-understanding assistant.
-Extract every key field from the document image (and optional OCR text) below.
-Return a **single JSON object** where each key is the field name (snake_case)
-and each value is the extracted value as a string.
 
-Rules:
-- Use snake_case for ALL field names (e.g. "bill_of_lading_number", "total_amount").
-- Dates must be in YYYY-MM-DD format.
-- Currency amounts must include only digits, dots, and an optional leading symbol ($, €, £).
-- If a field is not present, omit it entirely.
-- Do NOT wrap the JSON in markdown fences.
-- Do NOT include commentary — return ONLY the JSON object.
+Return ONLY a single JSON object. No markdown, no commentary.
+
+GLOBAL RULES
+- All field names use snake_case.
+- Dates: YYYY-MM-DD. Timestamps: YYYY-MM-DD HH:MM:SS (24-hour).
+- Currency values: digits + optional decimal + optional symbol ($, €, £).
+- Omit missing fields; never invent values.
+- Do not include OCR text or reasoning in the output.
+- Values should be strings unless representing arrays of rows (line_items).
+
+TOP-LEVEL JSON KEYS (when available)
+- id, metadata, page_count, pages[], tables[], fields[], validation
+- normalized: { document_type, header{}, line_items[], totals{}, line_items_secondary[] }
+
+STRUCTURE RULES (VERY STRICT)
+1) Never mix header metadata with line-item data.
+   - Header metadata goes to normalized.header.
+   - Row/table data goes to normalized.line_items[] (and optional normalized.line_items_secondary[]).
+
+2) Table-like data MUST be arrays:
+   - "normalized.line_items": [ { ... }, { ... } ]
+   - Never emit flat, numbered keys for rows.
+
+3) Each line_items entry must ONLY contain row-level fields (examples):
+   - item_description, product_description, sku, quantity, unit, unit_price, amount,
+     gross_gallons, net_gallons, temperature, temperature_unit, api_gravity,
+     compartment_number, taxes, service_date, etc.
+
+4) Header fields must NEVER appear inside line_items (examples):
+   - document_type, invoice_number, bol_number, receipt_number, po_number,
+     vendor_name, customer_name, addresses, dates/timestamps, totals, account_numbers.
+
+5) If totals exist, return:
+   normalized.totals = { subtotal, tax_amount, total_amount, gross_gallons, net_gallons }
+
+6) If multiple distinct tables exist, add:
+   normalized.line_items_secondary: [ ... ]
+
+7) When possible, include provenance on each line item:
+   _evidence: { table_id, cell_refs: [{row, col}], page }
+
+DOCUMENT-TYPE HINTS (if provided; do NOT ignore unexpected fields)
+- invoice: prefer invoice_number, invoice_date, due_date, vendor_name, vendor_address,
+  bill_to_name, bill_to_address, po_number, payment_terms, currency. Rows in line_items[]:
+  item_description, quantity, unit_price, amount. Totals under normalized.totals.
+- receipt: store_name, store_address, receipt_number, receipt_date, payment_method,
+  card_last_four. Rows in line_items[]. Totals under normalized.totals.
+- bol: bol_number, order_number, pro_number, po_number, shipper_name, shipper_address,
+  consignee_name, consignee_address, carrier_name, carrier_scac, driver_name,
+  trailer_number, truck_number, origin_city, origin_state, destination_city,
+  destination_state, tcn_number, epa_number, load_start_timestamp, load_end_timestamp.
+  Rows in line_items[]: product_description, un_number, hazard_class, packing_group,
+  gross_gallons, net_gallons, temperature, api_gravity, compartment_number.
+  If provided on the doc, put totals under normalized.totals.
+
+OUTPUT SHAPE (MINIMAL EXAMPLE)
+{
+  "fields": [ ... ],
+  "tables": [ ... ],
+  "normalized": {
+    "document_type": "invoice|receipt|bol|delivery_ticket|auto",
+    "header": { "...header fields..." },
+    "line_items": [ { "...row fields only..." } ],
+    "totals": { "...totals..." }
+  }
+}
 """
 
 _DOC_TYPE_HINTS: Dict[str, str] = {
     "bol": (
-        "This is a Bill of Lading. Look for fields like: "
-        "bol_number, shipper_name, shipper_address, consignee_name, "
-        "consignee_address, carrier_name, pro_number, pickup_date, "
-        "delivery_date, origin_city, origin_state, destination_city, "
-        "destination_state, weight, pieces, freight_class, "
-        "commodity_description, special_instructions, total_charges."
+        "This is a Bill of Lading (BOL). Populate normalized.header with bol_number, order_number, "
+        "pro_number, po_number, shipper_name, shipper_address, consignee_name, consignee_address, "
+        "carrier_name, carrier_scac, trailer_number, truck_number, driver_name, origin_city, origin_state, "
+        "destination_city, destination_state, tcn_number, epa_number, load_start_timestamp, load_end_timestamp. "
+        "All product/compartment rows go to normalized.line_items[]. Each row may include: product_description, "
+        "un_number, hazard_class, packing_group, gross_gallons, net_gallons, temperature, api_gravity, "
+        "compartment_number, and optional _evidence {table_id, cell_refs, page}. If totals exist, use normalized.totals."
     ),
     "invoice": (
-        "This is an Invoice. Look for fields like: "
-        "invoice_number, invoice_date, due_date, vendor_name, "
-        "vendor_address, bill_to_name, bill_to_address, po_number, "
-        "subtotal, tax_amount, total_amount, currency, payment_terms, "
-        "line_items (item, quantity, unit_price, amount)."
+        "This is an Invoice. Put invoice_number, invoice_date, due_date, vendor_name, vendor_address, "
+        "bill_to_name, bill_to_address, po_number, payment_terms, currency in normalized.header. "
+        "Return line items in normalized.line_items[] with item_description, quantity, unit_price, amount. "
+        "If present, use normalized.totals {subtotal, tax_amount, total_amount}."
     ),
     "receipt": (
-        "This is a Receipt. Look for fields like: "
-        "store_name, store_address, receipt_date, receipt_number, "
-        "line_items (item, quantity, price), subtotal, tax, total, "
-        "payment_method, card_last_four."
+        "This is a Receipt. Put store_name, store_address, receipt_number, receipt_date, payment_method, "
+        "card_last_four in normalized.header. Return purchased rows in normalized.line_items[]. "
+        "If present, use normalized.totals {subtotal, tax, total}."
     ),
     "delivery_ticket": (
-        "This is a Delivery Ticket. Look for fields like: "
-        "ticket_number, delivery_date, customer_name, customer_address, "
-        "driver_name, truck_number, product_description, quantity, "
-        "unit, gross_weight, tare_weight, net_weight, temperature."
+        "This is a Delivery Ticket. Put ticket_number, order_number, delivery_date, customer_name, "
+        "customer_address, driver_name, truck_number, trailer_number in normalized.header. "
+        "Return delivered products in normalized.line_items[] with product_description, quantity, unit, "
+        "gross_weight, net_weight, temperature, compartment_number. Put totals in normalized.totals if present."
     ),
+    "auto": (
+        "Unknown document type. Identify likely header fields in normalized.header and any table-like "
+        "data in normalized.line_items[]. Keep strict separation between header and row data. "
+        "If totals are found, use normalized.totals."
+    )
 }
 
 
@@ -223,6 +283,29 @@ class GPTVisionExtractor:
 
         # Parse the JSON and convert to Field objects
         extracted = self._parse_response(raw_text)
+
+        # ── Normalized schema sanity check (non-fatal) ──────────────
+        if isinstance(extracted, dict) and "normalized" in extracted and isinstance(extracted["normalized"], dict):
+            norm = extracted["normalized"]
+            if "header" in norm and not isinstance(norm.get("header"), dict):
+                logger.warning("normalized.header is not a dict; got=%s", type(norm.get("header")))
+            if "line_items" in norm and not isinstance(norm.get("line_items"), list):
+                logger.warning("normalized.line_items is not a list; got=%s", type(norm.get("line_items")))
+            if "totals" in norm and not isinstance(norm.get("totals"), dict):
+                logger.warning("normalized.totals is not a dict; got=%s", type(norm.get("totals")))
+
+        # ── Promote normalized into namespaced Field[] entries ───────
+        if isinstance(extracted, dict) and "normalized" in extracted and isinstance(extracted["normalized"], dict):
+            norm = extracted["normalized"]
+            # Copy into namespaced keys so _dict_to_fields() emits Field[]
+            # entries like: normalized.header.vendor_name,
+            # normalized.line_items[0].item_description, etc.
+            extracted.setdefault("normalized.header", norm.get("header", {}))
+            extracted.setdefault("normalized.line_items", norm.get("line_items", []))
+            if "line_items_secondary" in norm:
+                extracted.setdefault("normalized.line_items_secondary", norm.get("line_items_secondary", []))
+            if "totals" in norm:
+                extracted.setdefault("normalized.totals", norm.get("totals", {}))
 
         # ── Store in cache ──────────────────────────────────────────
         if self.cache is not None and cache_key and extracted:
