@@ -121,6 +121,49 @@ header .version{font-size:.78rem;color:var(--muted);margin-left:auto}
 .empty{text-align:center;padding:60px 20px;color:var(--muted)}
 .empty .icon{font-size:3rem;margin-bottom:12px;opacity:.4}
 
+/* ── Cost Dashboard ────────────────────────────────────────────── */
+.cost-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;margin:16px 0}
+.cost-card{background:var(--surface);border-radius:var(--radius);padding:18px 20px;border:1px solid var(--border);position:relative;overflow:hidden}
+.cost-card .value{font-size:1.7rem;font-weight:700;margin-bottom:2px}
+.cost-card .value.money{color:var(--success)}
+.cost-card .value.count{color:var(--primary)}
+.cost-card .value.cache{color:var(--warning)}
+.cost-card .label{font-size:.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.cost-card .badge{position:absolute;top:12px;right:12px;font-size:.7rem;padding:2px 8px;border-radius:12px;background:var(--primary-bg);color:var(--primary);font-weight:600}
+
+.cost-section{margin:28px 0 16px}
+.cost-section h3{font-size:1rem;font-weight:600;color:var(--text);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+
+.cost-actions{display:flex;gap:10px;flex-wrap:wrap;margin:18px 0}
+
+.cost-table{width:100%;border-collapse:collapse;font-size:.82rem}
+.cost-table thead{position:sticky;top:0}
+.cost-table th{text-align:left;padding:10px 14px;background:var(--surface2);color:var(--muted);font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border)}
+.cost-table td{padding:9px 14px;border-bottom:1px solid var(--border);color:var(--text)}
+.cost-table tr:hover td{background:var(--surface)}
+.cost-table .svc{font-weight:600;display:flex;align-items:center;gap:6px}
+.cost-table .svc-di{color:var(--primary)}
+.cost-table .svc-gpt{color:var(--success)}
+.cost-table .cached-tag{font-size:.7rem;padding:1px 7px;border-radius:10px;background:rgba(245,158,11,.15);color:var(--warning);font-weight:600}
+.cost-table .time-col{font-family:var(--mono);font-size:.78rem;color:var(--muted)}
+.cost-table-wrap{max-height:400px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface)}
+
+.cache-bar{height:24px;border-radius:12px;background:var(--surface2);overflow:hidden;display:flex;margin-top:8px}
+.cache-bar .hits{background:var(--success);transition:width .4s ease}
+.cache-bar .misses{background:var(--error);opacity:.4;transition:width .4s ease}
+.cache-bar-labels{display:flex;justify-content:space-between;font-size:.75rem;color:var(--muted);margin-top:4px}
+
+.cost-refresh{font-size:.75rem;color:var(--muted);margin-left:auto;display:flex;align-items:center;gap:4px}
+.cost-refresh .dot{width:6px;height:6px;border-radius:50%;background:var(--success);display:inline-block;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
+
+.breakdown-row{display:flex;gap:20px;flex-wrap:wrap}
+.breakdown-box{flex:1;min-width:220px;background:var(--surface);border-radius:var(--radius);padding:16px 18px;border:1px solid var(--border)}
+.breakdown-box h4{font-size:.85rem;color:var(--muted);margin-bottom:10px;font-weight:500}
+.breakdown-item{display:flex;justify-content:space-between;padding:5px 0;font-size:.84rem}
+.breakdown-item .lbl{color:var(--muted)}
+.breakdown-item .val{font-weight:600;font-family:var(--mono)}
+
 /* ── Responsive ────────────────────────────────────────────────── */
 @media(max-width:640px){
   .app{padding:12px 14px 40px}
@@ -143,6 +186,7 @@ header .version{font-size:.78rem;color:var(--muted);margin-left:auto}
     <div class="tab active" data-tab="upload">⬆ Upload &amp; Scan</div>
     <div class="tab" data-tab="artifacts">🔍 Artifacts</div>
     <div class="tab" data-tab="output">📝 JSON Output</div>
+    <div class="tab" data-tab="costs">💰 Cost &amp; Usage</div>
   </div>
 
   <!-- ─── UPLOAD PANEL ──────────────────────────────────────────── -->
@@ -210,6 +254,82 @@ header .version{font-size:.78rem;color:var(--muted);margin-left:auto}
   <div class="panel" id="panel-output">
     <div id="outputContent">
       <div class="empty"><div class="icon">📝</div><p>Upload and process a document first</p></div>
+    </div>
+  </div>
+
+  <!-- ─── COST & USAGE PANEL ────────────────────────────────────── -->
+  <div class="panel" id="panel-costs">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+      <h2 style="font-size:1.15rem;font-weight:700">Azure API Usage</h2>
+      <span class="cost-refresh" id="costRefreshIndicator"><span class="dot"></span> Live</span>
+    </div>
+
+    <!-- Summary cards -->
+    <div class="cost-grid" id="costCards">
+      <div class="cost-card"><div class="value money" id="ccTotalCost">$0.00</div><div class="label">Estimated Cost</div></div>
+      <div class="cost-card"><div class="value count" id="ccTotalCalls">0</div><div class="label">Total API Calls</div></div>
+      <div class="cost-card"><div class="value count" id="ccDICalls">0</div><div class="label">Doc Intelligence</div><div class="badge">DI</div></div>
+      <div class="cost-card"><div class="value count" id="ccGPTCalls">0</div><div class="label">GPT Vision</div><div class="badge" style="background:rgba(34,197,94,.12);color:var(--success)">GPT</div></div>
+      <div class="cost-card"><div class="value count" id="ccPages">0</div><div class="label">Pages Analysed</div></div>
+      <div class="cost-card"><div class="value count" id="ccTokens">0</div><div class="label">Tokens Used</div></div>
+      <div class="cost-card"><div class="value cache" id="ccCacheHits">0</div><div class="label">Cache Hits</div></div>
+      <div class="cost-card"><div class="value money" id="ccSaved">$0.00</div><div class="label">Saved by Cache</div></div>
+    </div>
+
+    <!-- Cache hit-rate bar -->
+    <div class="cost-section">
+      <h3>📊 Cache Performance</h3>
+      <div class="breakdown-row">
+        <div class="breakdown-box" style="flex:2">
+          <h4>Hit Rate</h4>
+          <div class="cache-bar"><div class="hits" id="cacheHitBar" style="width:0%"></div><div class="misses" id="cacheMissBar" style="width:0%"></div></div>
+          <div class="cache-bar-labels"><span id="cacheHitPct">0% hits</span><span id="cacheMissPct">0% misses</span></div>
+        </div>
+        <div class="breakdown-box">
+          <h4>Cache Store</h4>
+          <div class="breakdown-item"><span class="lbl">Entries</span><span class="val" id="cacheEntries">0</span></div>
+          <div class="breakdown-item"><span class="lbl">Status</span><span class="val" id="cacheStatus">—</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cost breakdown -->
+    <div class="cost-section">
+      <h3>💵 Cost Breakdown</h3>
+      <div class="breakdown-row" id="costBreakdown">
+        <div class="breakdown-box">
+          <h4>Document Intelligence</h4>
+          <div class="breakdown-item"><span class="lbl">Calls</span><span class="val" id="bdDICalls">0</span></div>
+          <div class="breakdown-item"><span class="lbl">Pages</span><span class="val" id="bdDIPages">0</span></div>
+          <div class="breakdown-item"><span class="lbl">Cost</span><span class="val" id="bdDICost">$0.00</span></div>
+        </div>
+        <div class="breakdown-box">
+          <h4>GPT Vision</h4>
+          <div class="breakdown-item"><span class="lbl">Calls</span><span class="val" id="bdGPTCalls">0</span></div>
+          <div class="breakdown-item"><span class="lbl">Tokens</span><span class="val" id="bdGPTTokens">0</span></div>
+          <div class="breakdown-item"><span class="lbl">Cost</span><span class="val" id="bdGPTCost">$0.00</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="cost-actions">
+      <button class="btn btn-secondary btn-sm" onclick="loadCosts()">🔄 Refresh</button>
+      <button class="btn btn-secondary btn-sm" onclick="resetCosts()" style="color:var(--warning)">🗑 Reset Counters</button>
+      <button class="btn btn-secondary btn-sm" onclick="clearCache()" style="color:var(--error)">🧹 Clear Cache</button>
+    </div>
+
+    <!-- Call history table -->
+    <div class="cost-section">
+      <h3>📋 Call History</h3>
+      <div class="cost-table-wrap" id="costTableWrap">
+        <table class="cost-table">
+          <thead><tr><th>Time</th><th>Service</th><th>Model</th><th>Detail</th><th>Latency</th><th>Cost</th><th></th></tr></thead>
+          <tbody id="costTableBody">
+            <tr><td colspan="7" style="text-align:center;color:var(--muted);padding:30px">No API calls recorded yet</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 </div>
@@ -339,6 +459,8 @@ async function pollStatus() {
       btnProcess.disabled = false;
       await loadResult();
       await loadArtifacts();
+      // Refresh cost data after processing
+      loadCosts();
       // Auto-switch to artifacts tab
       $$('.tab')[1].click();
     } else if (job.status === 'failed') {
@@ -528,6 +650,135 @@ function highlightJson() {
     editor.scrollTop = linesBefore * 18 - 100;
   }
 }
+
+// ─── Cost & Usage Dashboard ───────────────────────────────────────
+let costRefreshTimer = null;
+
+async function loadCosts() {
+  try {
+    const res = await fetch('/api/costs');
+    if (!res.ok) return;
+    const data = await res.json();
+    renderCosts(data);
+  } catch (e) {
+    console.warn('Failed to load costs:', e);
+  }
+}
+
+function renderCosts(data) {
+  const c = data.costs || {};
+  const cache = data.cache || {};
+
+  // Summary cards
+  $('#ccTotalCost').textContent = '$' + (c.estimated_cost_usd || 0).toFixed(4);
+  $('#ccTotalCalls').textContent = c.total_calls || 0;
+  $('#ccDICalls').textContent = c.total_di_calls || 0;
+  $('#ccGPTCalls').textContent = c.total_gpt_calls || 0;
+  $('#ccPages').textContent = c.total_pages_analysed || 0;
+  $('#ccTokens').textContent = (c.total_tokens || 0).toLocaleString();
+  $('#ccCacheHits').textContent = c.cache_hits || 0;
+  $('#ccSaved').textContent = '$' + (c.cost_saved_by_cache_usd || 0).toFixed(4);
+
+  // Cache performance bar
+  const hits = cache.hits || 0;
+  const misses = cache.misses || 0;
+  const total = hits + misses;
+  const hitPct = total > 0 ? (hits / total * 100) : 0;
+  const missPct = total > 0 ? (misses / total * 100) : 0;
+  $('#cacheHitBar').style.width = hitPct + '%';
+  $('#cacheMissBar').style.width = missPct + '%';
+  $('#cacheHitPct').textContent = hitPct.toFixed(0) + '% hits (' + hits + ')';
+  $('#cacheMissPct').textContent = missPct.toFixed(0) + '% misses (' + misses + ')';
+  $('#cacheEntries').textContent = cache.entries || 0;
+  $('#cacheStatus').textContent = cache.enabled ? '✓ Active' : '○ Inactive';
+  $('#cacheStatus').style.color = cache.enabled ? 'var(--success)' : 'var(--muted)';
+
+  // Cost breakdown by service
+  const records = c.records || [];
+  let diCost = 0, gptCost = 0, diPages = 0, gptTokens = 0;
+  records.forEach(r => {
+    if (r.service === 'doc_intelligence') {
+      diCost += r.estimated_cost_usd;
+      diPages += r.pages;
+    } else if (r.service === 'gpt_vision') {
+      gptCost += r.estimated_cost_usd;
+      gptTokens += r.prompt_tokens + r.completion_tokens;
+    }
+  });
+  $('#bdDICalls').textContent = c.total_di_calls || 0;
+  $('#bdDIPages').textContent = diPages;
+  $('#bdDICost').textContent = '$' + diCost.toFixed(4);
+  $('#bdGPTCalls').textContent = c.total_gpt_calls || 0;
+  $('#bdGPTTokens').textContent = gptTokens.toLocaleString();
+  $('#bdGPTCost').textContent = '$' + gptCost.toFixed(4);
+
+  // Call history table
+  const tbody = $('#costTableBody');
+  if (!records.length) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:30px">No API calls recorded yet</td></tr>';
+    return;
+  }
+
+  // Show newest first
+  const sorted = [...records].reverse();
+  tbody.innerHTML = sorted.map(r => {
+    const svcClass = r.service === 'doc_intelligence' ? 'svc-di' : 'svc-gpt';
+    const svcLabel = r.service === 'doc_intelligence' ? '🔍 DI' : '🤖 GPT';
+    const detail = r.service === 'doc_intelligence'
+      ? r.pages + ' page' + (r.pages !== 1 ? 's' : '')
+      : (r.prompt_tokens + r.completion_tokens).toLocaleString() + ' tok';
+    const time = r.timestamp ? new Date(r.timestamp).toLocaleTimeString() : '—';
+    const cachedTag = r.cached ? '<span class="cached-tag">CACHED</span>' : '';
+    return `<tr>
+      <td class="time-col">${time}</td>
+      <td><span class="svc ${svcClass}">${svcLabel}</span></td>
+      <td>${r.model}</td>
+      <td>${detail}</td>
+      <td class="time-col">${r.latency_seconds.toFixed(1)}s</td>
+      <td>$${r.estimated_cost_usd.toFixed(4)}</td>
+      <td>${cachedTag}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function resetCosts() {
+  if (!confirm('Reset all cost tracking counters?')) return;
+  try {
+    await fetch('/api/costs/reset', { method: 'POST' });
+    await loadCosts();
+  } catch (e) {
+    alert('Failed to reset: ' + e.message);
+  }
+}
+
+async function clearCache() {
+  if (!confirm('Clear the entire Azure response cache?')) return;
+  try {
+    const res = await fetch('/api/cache/clear', { method: 'POST' });
+    const data = await res.json();
+    alert(`Cache cleared — ${data.entries_cleared} entries removed`);
+    await loadCosts();
+  } catch (e) {
+    alert('Failed to clear cache: ' + e.message);
+  }
+}
+
+// Auto-refresh costs when the tab is active
+$$('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    if (tab.dataset.tab === 'costs') {
+      loadCosts();
+      if (!costRefreshTimer) {
+        costRefreshTimer = setInterval(loadCosts, 10000); // refresh every 10s
+      }
+    } else {
+      if (costRefreshTimer) {
+        clearInterval(costRefreshTimer);
+        costRefreshTimer = null;
+      }
+    }
+  });
+});
 
 // ─── Lightbox ─────────────────────────────────────────────────────
 function showLightbox(url) {
