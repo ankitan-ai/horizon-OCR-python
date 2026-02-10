@@ -202,15 +202,19 @@ class DocumentClassifier:
 
         # If image-based call returned empty, retry with text-only prompt
         if not raw:
-            logger.info("Classifier returned empty content — retrying text-only")
+            logger.warning(
+                f"Classifier returned empty content (tokens used: "
+                f"{response.usage.completion_tokens if response.usage else '?'}) "
+                f"— retrying text-only"
+            )
             text_messages = [
                 {"role": "system", "content": _CLASSIFIER_SYSTEM},
                 {
                     "role": "user",
                     "content": (
-                        "I cannot show you the document image. Based on typical "
-                        "business documents, return a sensible default classification. "
-                        "The document is likely a standard business document."
+                        "Classify this as a standard business document. "
+                        'Respond with exactly: {"type": "other", "complexity": "medium"} '
+                        "or pick a more specific type if you can infer one."
                     ),
                 },
             ]
@@ -270,6 +274,11 @@ class DocumentClassifier:
     def _call_classifier(self, messages: list) -> object | None:
         """Send a chat completion request with model-quirk fallbacks.
 
+        GPT-5-nano uses internal reasoning tokens that count against
+        ``max_completion_tokens``.  We set a generous budget (1024) so
+        the model has room for both reasoning and the visible JSON
+        output.  The actual visible output is tiny (~30 tokens).
+
         Returns the response object or *None* if every attempt fails.
         """
         try:
@@ -277,7 +286,7 @@ class DocumentClassifier:
                 return self.client.chat.completions.create(
                     model=self.CLASSIFIER_DEPLOYMENT,
                     messages=messages,
-                    max_completion_tokens=200,
+                    max_completion_tokens=1024,
                     temperature=0.0,
                 )
             except Exception as inner:
@@ -286,14 +295,14 @@ class DocumentClassifier:
                     return self.client.chat.completions.create(
                         model=self.CLASSIFIER_DEPLOYMENT,
                         messages=messages,
-                        max_tokens=200,
+                        max_tokens=1024,
                         temperature=0.0,
                     )
                 elif "temperature" in inner_msg:
                     return self.client.chat.completions.create(
                         model=self.CLASSIFIER_DEPLOYMENT,
                         messages=messages,
-                        max_completion_tokens=200,
+                        max_completion_tokens=1024,
                     )
                 else:
                     raise
@@ -305,20 +314,29 @@ class DocumentClassifier:
     def _extract_content(choice) -> str:
         """Pull text content from a chat completion choice.
 
-        Also checks the ``refusal`` field and logs diagnostics when
-        the content is unexpectedly empty.
+        Checks ``message.content``, ``tool_calls``, and ``refusal``.
+        Logs diagnostics when content is unexpectedly empty.
         """
         if choice is None or choice.message is None:
             return ""
         raw = (choice.message.content or "").strip()
         if not raw:
+            # Some models put output in tool_calls instead of content
+            tool_calls = getattr(choice.message, "tool_calls", None)
+            if tool_calls:
+                for tc in tool_calls:
+                    fn = getattr(tc, "function", None)
+                    if fn and getattr(fn, "arguments", None):
+                        logger.info("Classifier output found in tool_calls")
+                        return fn.arguments.strip()
+
             refusal = getattr(choice.message, "refusal", None)
             if refusal:
                 logger.warning(f"Classifier refused: {refusal}")
             finish = getattr(choice, "finish_reason", None)
-            logger.debug(
+            logger.warning(
                 f"Classifier empty content — finish_reason={finish}, "
-                f"choice={choice}"
+                f"message keys: {list(vars(choice.message).keys())}"
             )
         return raw
 

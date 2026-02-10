@@ -241,7 +241,11 @@ class TestClassifyFlow:
         assert result.complexity == "medium"
         assert result.recommended_gpt_deployment is None
 
-    def test_classify_unconfigured_openai_returns_defaults(self, dummy_image):
+    def test_classify_unconfigured_openai_returns_defaults(self, dummy_image, monkeypatch):
+        monkeypatch.delenv("AZURE_OPENAI_KEY", raising=False)
+        monkeypatch.delenv("AZURE_OPENAI_ENDPOINT", raising=False)
+        monkeypatch.delenv("AZURE_OPENAI_DEPLOYMENT", raising=False)
+        monkeypatch.setattr("dotenv.load_dotenv", lambda *a, **kw: None)
         config = AzureConfig()  # No openai keys
         classifier = DocumentClassifier(config)
 
@@ -262,7 +266,7 @@ class TestClassifyFlow:
         assert call_kwargs.kwargs["model"] == "gpt-5-nano"
         # Accepts either new or legacy token-limit parameter
         token_limit = call_kwargs.kwargs.get("max_completion_tokens") or call_kwargs.kwargs.get("max_tokens")
-        assert token_limit == 200
+        assert token_limit == 1024
 
     def test_classify_records_cost(self, azure_config, dummy_image):
         cost_tracker = MagicMock()
