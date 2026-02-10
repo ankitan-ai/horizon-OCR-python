@@ -15,6 +15,7 @@
   --radius:10px;--shadow:0 4px 24px rgba(0,0,0,.35);
   --font:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
   --mono:'Cascadia Code','Fira Code','JetBrains Mono',monospace;
+  --conf-high:#22c55e;--conf-mid:#f59e0b;--conf-low:#ef4444;
 }
 html{font-size:15px}
 body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh}
@@ -28,8 +29,8 @@ header h1 span{color:var(--primary)}
 header .version{font-size:.78rem;color:var(--muted);margin-left:auto}
 
 /* ── Tabs ───────────────────────────────────────────────────────── */
-.tabs{display:flex;gap:6px;margin:24px 0 20px;border-bottom:2px solid var(--border);padding-bottom:0}
-.tab{padding:10px 22px;cursor:pointer;font-size:.9rem;font-weight:500;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;transition:.2s;user-select:none;border-radius:var(--radius) var(--radius) 0 0}
+.tabs{display:flex;gap:6px;margin:24px 0 20px;border-bottom:2px solid var(--border);padding-bottom:0;overflow-x:auto}
+.tab{padding:10px 22px;cursor:pointer;font-size:.9rem;font-weight:500;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;transition:.2s;user-select:none;border-radius:var(--radius) var(--radius) 0 0;white-space:nowrap}
 .tab:hover{color:var(--text);background:var(--surface)}
 .tab.active{color:var(--primary);border-bottom-color:var(--primary);background:var(--surface)}
 .panel{display:none}
@@ -46,6 +47,18 @@ header .version{font-size:.78rem;color:var(--muted);margin-left:auto}
 .drop-zone p{color:var(--muted);margin-top:6px;font-size:.88rem}
 .drop-zone input{position:absolute;inset:0;opacity:0;cursor:pointer}
 
+/* ── Preview ───────────────────────────────────────────────────── */
+.preview-area{display:flex;gap:20px;margin:16px 0;align-items:flex-start;flex-wrap:wrap}
+.preview-thumb{border-radius:var(--radius);border:1px solid var(--border);max-height:220px;background:#000;object-fit:contain}
+.preview-info{flex:1;min-width:200px}
+.preview-info .filename{font-weight:600;font-size:1rem;margin-bottom:6px;word-break:break-all}
+.preview-info .meta{font-size:.84rem;color:var(--muted);line-height:1.6}
+.file-list{margin:12px 0;max-height:240px;overflow-y:auto}
+.file-item{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surface);border-radius:var(--radius);margin-bottom:6px;font-size:.85rem;border:1px solid var(--border)}
+.file-item .name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file-item .size{color:var(--muted);font-family:var(--mono);font-size:.78rem}
+.file-item .remove{cursor:pointer;color:var(--error);font-size:1.1rem;padding:0 4px}
+
 /* ── Options Grid ──────────────────────────────────────────────── */
 .options{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;margin:20px 0}
 .opt{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--surface);border-radius:var(--radius);font-size:.85rem}
@@ -61,7 +74,6 @@ header .version{font-size:.78rem;color:var(--muted);margin-left:auto}
 .mode-badge{font-size:.72rem;padding:3px 10px;border-radius:20px;font-weight:600;letter-spacing:.3px}
 .mode-badge.local{background:rgba(99,102,241,.15);color:var(--primary)}
 .mode-badge.azure{background:rgba(34,197,94,.15);color:var(--success)}
-.mode-badge.hybrid{background:rgba(245,158,11,.15);color:var(--warning)}
 
 /* ── Buttons ────────────────────────────────────────────────────── */
 .btn{
@@ -76,6 +88,8 @@ header .version{font-size:.78rem;color:var(--muted);margin-left:auto}
 .btn-secondary:hover{background:var(--surface3)}
 .btn-success{background:var(--success);color:#fff}
 .btn-sm{padding:6px 14px;font-size:.82rem}
+.btn-danger{background:var(--error);color:#fff}
+.btn-danger:hover{background:#dc2626}
 
 /* ── Progress / Status ─────────────────────────────────────────── */
 .status-bar{margin:20px 0;padding:16px 20px;border-radius:var(--radius);background:var(--surface);display:none;align-items:center;gap:14px}
@@ -92,6 +106,17 @@ header .version{font-size:.78rem;color:var(--muted);margin-left:auto}
 .artifact-card img{width:100%;display:block;cursor:pointer;background:#000}
 .artifact-card .label{padding:10px 14px;font-size:.82rem;color:var(--muted);display:flex;justify-content:space-between}
 
+/* ── Confidence Highlighting ───────────────────────────────────── */
+.conf-legend{display:flex;gap:16px;margin:12px 0;font-size:.8rem;color:var(--muted);align-items:center;flex-wrap:wrap}
+.conf-legend .dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:4px}
+.conf-high{color:var(--conf-high)}
+.conf-mid{color:var(--conf-mid)}
+.conf-low{color:var(--conf-low)}
+.conf-badge{font-size:.7rem;padding:1px 6px;border-radius:8px;font-weight:600;font-family:var(--mono)}
+.conf-badge.high{background:rgba(34,197,94,.15);color:var(--conf-high)}
+.conf-badge.mid{background:rgba(245,158,11,.15);color:var(--conf-mid)}
+.conf-badge.low{background:rgba(239,68,68,.15);color:var(--conf-low)}
+
 /* ── Lightbox ──────────────────────────────────────────────────── */
 .lightbox{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:999;display:none;justify-content:center;align-items:center;cursor:zoom-out}
 .lightbox.show{display:flex}
@@ -99,7 +124,6 @@ header .version{font-size:.78rem;color:var(--muted);margin-left:auto}
 
 /* ── JSON Editor ───────────────────────────────────────────────── */
 .editor-toolbar{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center}
-.editor-toolbar .search-box{flex:1;min-width:200px;padding:8px 14px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:.88rem;font-family:var(--mono)}
 .json-editor{
   width:100%;min-height:520px;padding:18px;border-radius:var(--radius);
   border:1px solid var(--border);background:var(--surface);color:var(--text);
@@ -111,6 +135,26 @@ header .version{font-size:.78rem;color:var(--muted);margin-left:auto}
 .json-status.valid{color:var(--success)}
 .json-status.invalid{color:var(--error)}
 
+/* ── Field Editor ──────────────────────────────────────────────── */
+.field-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px}
+.field-card{background:var(--surface);border-radius:var(--radius);padding:14px 16px;border:1px solid var(--border)}
+.field-card.low-conf{border-color:var(--error);border-width:2px}
+.field-card.mid-conf{border-color:var(--warning)}
+.field-card .field-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.field-card .field-name{font-size:.82rem;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;font-weight:600}
+.field-card .field-input{width:100%;padding:8px 12px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:.9rem;font-family:var(--font)}
+.field-card .field-input:focus{outline:none;border-color:var(--primary)}
+.field-card .field-meta{font-size:.75rem;color:var(--muted);margin-top:6px;display:flex;gap:10px;flex-wrap:wrap}
+.field-card .field-source{font-size:.7rem;padding:1px 6px;border-radius:8px;background:var(--primary-bg);color:var(--primary)}
+.view-toggle{display:flex;gap:2px;background:var(--surface2);border-radius:var(--radius);padding:2px;margin-bottom:14px}
+.view-toggle .vt-btn{padding:6px 16px;border:none;background:transparent;color:var(--muted);font-size:.84rem;cursor:pointer;border-radius:8px;font-weight:500;transition:.2s}
+.view-toggle .vt-btn.active{background:var(--primary);color:#fff}
+.result-table{width:100%;border-collapse:collapse;font-size:.84rem;background:var(--surface);border-radius:var(--radius);overflow:hidden;border:1px solid var(--border)}
+.result-table th{background:var(--surface2);padding:8px 12px;text-align:left;font-weight:600;color:var(--muted);font-size:.78rem;text-transform:uppercase}
+.result-table td{padding:7px 12px;border-top:1px solid var(--border)}
+.result-table td input{width:100%;background:transparent;border:none;color:var(--text);font-size:.84rem;padding:2px 0;font-family:var(--font)}
+.result-table td input:focus{outline:none;border-bottom:1px solid var(--primary)}
+
 /* ── Stats Row ─────────────────────────────────────────────────── */
 .stats{display:flex;gap:14px;flex-wrap:wrap;margin:16px 0}
 .stat{background:var(--surface);border-radius:var(--radius);padding:14px 20px;min-width:130px;border:1px solid var(--border)}
@@ -121,6 +165,18 @@ header .version{font-size:.78rem;color:var(--muted);margin-left:auto}
 .empty{text-align:center;padding:60px 20px;color:var(--muted)}
 .empty .icon{font-size:3rem;margin-bottom:12px;opacity:.4}
 
+/* ── History Panel ─────────────────────────────────────────────── */
+.history-table{width:100%;border-collapse:collapse;font-size:.84rem}
+.history-table th{text-align:left;padding:10px 14px;background:var(--surface2);color:var(--muted);font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border)}
+.history-table td{padding:10px 14px;border-bottom:1px solid var(--border);color:var(--text)}
+.history-table tr:hover td{background:var(--surface)}
+.history-table tbody tr{cursor:pointer}
+.status-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px}
+.status-dot.completed{background:var(--success)}
+.status-dot.failed{background:var(--error)}
+.status-dot.processing,.status-dot.queued{background:var(--warning)}
+.history-table-wrap{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);overflow:auto;max-height:600px}
+
 /* ── Cost Dashboard ────────────────────────────────────────────── */
 .cost-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;margin:16px 0}
 .cost-card{background:var(--surface);border-radius:var(--radius);padding:18px 20px;border:1px solid var(--border);position:relative;overflow:hidden}
@@ -130,12 +186,9 @@ header .version{font-size:.78rem;color:var(--muted);margin-left:auto}
 .cost-card .value.cache{color:var(--warning)}
 .cost-card .label{font-size:.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
 .cost-card .badge{position:absolute;top:12px;right:12px;font-size:.7rem;padding:2px 8px;border-radius:12px;background:var(--primary-bg);color:var(--primary);font-weight:600}
-
 .cost-section{margin:28px 0 16px}
 .cost-section h3{font-size:1rem;font-weight:600;color:var(--text);margin-bottom:12px;display:flex;align-items:center;gap:8px}
-
 .cost-actions{display:flex;gap:10px;flex-wrap:wrap;margin:18px 0}
-
 .cost-table{width:100%;border-collapse:collapse;font-size:.82rem}
 .cost-table thead{position:sticky;top:0}
 .cost-table th{text-align:left;padding:10px 14px;background:var(--surface2);color:var(--muted);font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border)}
@@ -147,16 +200,13 @@ header .version{font-size:.78rem;color:var(--muted);margin-left:auto}
 .cost-table .cached-tag{font-size:.7rem;padding:1px 7px;border-radius:10px;background:rgba(245,158,11,.15);color:var(--warning);font-weight:600}
 .cost-table .time-col{font-family:var(--mono);font-size:.78rem;color:var(--muted)}
 .cost-table-wrap{max-height:400px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface)}
-
 .cache-bar{height:24px;border-radius:12px;background:var(--surface2);overflow:hidden;display:flex;margin-top:8px}
 .cache-bar .hits{background:var(--success);transition:width .4s ease}
 .cache-bar .misses{background:var(--error);opacity:.4;transition:width .4s ease}
 .cache-bar-labels{display:flex;justify-content:space-between;font-size:.75rem;color:var(--muted);margin-top:4px}
-
 .cost-refresh{font-size:.75rem;color:var(--muted);margin-left:auto;display:flex;align-items:center;gap:4px}
 .cost-refresh .dot{width:6px;height:6px;border-radius:50%;background:var(--success);display:inline-block;animation:pulse 2s infinite}
 @keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
-
 .breakdown-row{display:flex;gap:20px;flex-wrap:wrap}
 .breakdown-box{flex:1;min-width:220px;background:var(--surface);border-radius:var(--radius);padding:16px 18px;border:1px solid var(--border)}
 .breakdown-box h4{font-size:.85rem;color:var(--muted);margin-bottom:10px;font-weight:500}
@@ -170,6 +220,7 @@ header .version{font-size:.78rem;color:var(--muted);margin-left:auto}
   .artifacts-grid{grid-template-columns:1fr}
   .options{grid-template-columns:1fr 1fr}
   .tabs{overflow-x:auto}
+  .field-grid{grid-template-columns:1fr}
 }
 </style>
 </head>
@@ -178,27 +229,34 @@ header .version{font-size:.78rem;color:var(--muted);margin-left:auto}
   <!-- Header -->
   <header>
     <h1>📄 Doc<span>Vision</span></h1>
-    <span class="version" id="versionBadge">loading…</span>
+    <span class="version" id="versionBadge">DocVision Web UI</span>
   </header>
 
   <!-- Tabs -->
   <div class="tabs">
     <div class="tab active" data-tab="upload">⬆ Upload &amp; Scan</div>
     <div class="tab" data-tab="artifacts">🔍 Artifacts</div>
-    <div class="tab" data-tab="output">📝 JSON Output</div>
+    <div class="tab" data-tab="output">📝 Output</div>
+    <div class="tab" data-tab="history">📋 History</div>
     <div class="tab" data-tab="costs">💰 Cost &amp; Usage</div>
   </div>
 
   <!-- ─── UPLOAD PANEL ──────────────────────────────────────────── -->
   <div class="panel active" id="panel-upload">
     <div class="drop-zone" id="dropZone">
-      <input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png,.tiff,.tif,.bmp,.webp">
+      <input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png,.tiff,.tif,.bmp,.webp" multiple>
       <div class="icon">📁</div>
-      <div><strong>Drop a document here</strong> or click to browse</div>
-      <p>PDF · JPEG · PNG · TIFF · BMP · WebP</p>
+      <div><strong>Drop documents here</strong> or click to browse</div>
+      <p>PDF · JPEG · PNG · TIFF · BMP · WebP — single or multiple files</p>
     </div>
 
-    <div id="fileInfo" style="margin:14px 0;font-size:.9rem;display:none"></div>
+    <!-- Preview area (single file) -->
+    <div id="previewArea" style="display:none"></div>
+
+    <!-- File list (batch) -->
+    <div id="fileListArea" style="display:none">
+      <div class="file-list" id="fileList"></div>
+    </div>
 
     <!-- Processing Mode -->
     <div class="mode-row">
@@ -232,8 +290,9 @@ header .version{font-size:.78rem;color:var(--muted);margin-left:auto}
       </div>
     </details>
 
-    <div style="margin-top:20px">
+    <div style="margin-top:20px;display:flex;gap:10px">
       <button class="btn btn-primary" id="btnProcess" disabled>🚀 Process Document</button>
+      <button class="btn btn-primary" id="btnBatch" disabled style="display:none">🚀 Process All Files</button>
     </div>
 
     <div class="status-bar" id="statusBar">
@@ -250,10 +309,26 @@ header .version{font-size:.78rem;color:var(--muted);margin-left:auto}
     </div>
   </div>
 
-  <!-- ─── JSON OUTPUT PANEL ─────────────────────────────────────── -->
+  <!-- ─── OUTPUT PANEL (Field Editor + JSON toggle) ─────────────── -->
   <div class="panel" id="panel-output">
     <div id="outputContent">
       <div class="empty"><div class="icon">📝</div><p>Upload and process a document first</p></div>
+    </div>
+  </div>
+
+  <!-- ─── HISTORY PANEL ─────────────────────────────────────────── -->
+  <div class="panel" id="panel-history">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+      <h2 style="font-size:1.15rem;font-weight:700">Processing History</h2>
+      <button class="btn btn-secondary btn-sm" onclick="loadHistory()">🔄 Refresh</button>
+    </div>
+    <div class="history-table-wrap">
+      <table class="history-table">
+        <thead><tr><th>File</th><th>Mode</th><th>Status</th><th>Pages</th><th>Lines</th><th>Tables</th><th>Fields</th><th>Time</th><th>Created</th></tr></thead>
+        <tbody id="historyTableBody">
+          <tr><td colspan="9" style="text-align:center;color:var(--muted);padding:40px">No documents processed yet</td></tr>
+        </tbody>
+      </table>
     </div>
   </div>
 
@@ -263,8 +338,6 @@ header .version{font-size:.78rem;color:var(--muted);margin-left:auto}
       <h2 style="font-size:1.15rem;font-weight:700">Azure API Usage</h2>
       <span class="cost-refresh" id="costRefreshIndicator"><span class="dot"></span> Live</span>
     </div>
-
-    <!-- Summary cards -->
     <div class="cost-grid" id="costCards">
       <div class="cost-card"><div class="value money" id="ccTotalCost">$0.00</div><div class="label">Estimated Cost</div></div>
       <div class="cost-card"><div class="value count" id="ccTotalCalls">0</div><div class="label">Total API Calls</div></div>
@@ -276,7 +349,6 @@ header .version{font-size:.78rem;color:var(--muted);margin-left:auto}
       <div class="cost-card"><div class="value money" id="ccSaved">$0.00</div><div class="label">Saved by Cache</div></div>
     </div>
 
-    <!-- Cache hit-rate bar -->
     <div class="cost-section">
       <h3>📊 Cache Performance</h3>
       <div class="breakdown-row">
@@ -293,18 +365,15 @@ header .version{font-size:.78rem;color:var(--muted);margin-left:auto}
       </div>
     </div>
 
-    <!-- Cost breakdown -->
     <div class="cost-section">
       <h3>💵 Cost Breakdown</h3>
       <div class="breakdown-row" id="costBreakdown">
-        <div class="breakdown-box">
-          <h4>Document Intelligence</h4>
+        <div class="breakdown-box"><h4>Document Intelligence</h4>
           <div class="breakdown-item"><span class="lbl">Calls</span><span class="val" id="bdDICalls">0</span></div>
           <div class="breakdown-item"><span class="lbl">Pages</span><span class="val" id="bdDIPages">0</span></div>
           <div class="breakdown-item"><span class="lbl">Cost</span><span class="val" id="bdDICost">$0.00</span></div>
         </div>
-        <div class="breakdown-box">
-          <h4>GPT Vision</h4>
+        <div class="breakdown-box"><h4>GPT Vision</h4>
           <div class="breakdown-item"><span class="lbl">Calls</span><span class="val" id="bdGPTCalls">0</span></div>
           <div class="breakdown-item"><span class="lbl">Tokens</span><span class="val" id="bdGPTTokens">0</span></div>
           <div class="breakdown-item"><span class="lbl">Cost</span><span class="val" id="bdGPTCost">$0.00</span></div>
@@ -312,17 +381,15 @@ header .version{font-size:.78rem;color:var(--muted);margin-left:auto}
       </div>
     </div>
 
-    <!-- Actions -->
     <div class="cost-actions">
       <button class="btn btn-secondary btn-sm" onclick="loadCosts()">🔄 Refresh</button>
       <button class="btn btn-secondary btn-sm" onclick="resetCosts()" style="color:var(--warning)">🗑 Reset Counters</button>
       <button class="btn btn-secondary btn-sm" onclick="clearCache()" style="color:var(--error)">🧹 Clear Cache</button>
     </div>
 
-    <!-- Call history table -->
     <div class="cost-section">
       <h3>📋 Call History</h3>
-      <div class="cost-table-wrap" id="costTableWrap">
+      <div class="cost-table-wrap">
         <table class="cost-table">
           <thead><tr><th>Time</th><th>Service</th><th>Model</th><th>Detail</th><th>Latency</th><th>Cost</th><th></th></tr></thead>
           <tbody id="costTableBody">
@@ -334,26 +401,33 @@ header .version{font-size:.78rem;color:var(--muted);margin-left:auto}
   </div>
 </div>
 
-<!-- Lightbox -->
+<!-- Lightbox overlay -->
 <div class="lightbox" id="lightbox">
   <img id="lightboxImg" src="">
 </div>
 
 <script>
-// ─── State ────────────────────────────────────────────────────────
-let currentJobId = null;
-let currentResult = null;
-let selectedFile = null;
-let pollTimer = null;
-let processStart = 0;
+/* ════════════════════════════════════════════════════════════════════
+   DocVision — Front-end application logic
+   ════════════════════════════════════════════════════════════════════ */
 
-// ─── DOM refs ─────────────────────────────────────────────────────
-const $ = s => document.querySelector(s);
+// ─── Global state ─────────────────────────────────────────────────
+let currentJobId   = null;
+let currentResult  = null;
+let selectedFile   = null;
+let selectedFiles  = [];        // batch
+let processStart   = 0;
+let outputView     = 'fields';  // 'fields' | 'json'
+let costRefreshTimer = null;
+
+// ─── DOM helpers ──────────────────────────────────────────────────
+const $  = s => document.querySelector(s);
 const $$ = s => document.querySelectorAll(s);
+
 const dropZone      = $('#dropZone');
 const fileInput     = $('#fileInput');
-const fileInfo      = $('#fileInfo');
 const btnProcess    = $('#btnProcess');
+const btnBatch      = $('#btnBatch');
 const statusBar     = $('#statusBar');
 const statusText    = $('#statusText');
 const statusTime    = $('#statusTime');
@@ -367,53 +441,148 @@ const localDetails  = $('#localOptionsDetails');
 
 // ─── Mode toggle ──────────────────────────────────────────────────
 modeSelect.addEventListener('change', () => {
-  const mode = modeSelect.value;
-  modeBadge.textContent = mode.toUpperCase();
-  modeBadge.className = 'mode-badge ' + mode;
-  const isAzure = mode === 'azure';
+  const m = modeSelect.value;
+  modeBadge.textContent = m.toUpperCase();
+  modeBadge.className = 'mode-badge ' + m;
+  const isAzure = m === 'azure';
   localDetails.style.display = isAzure ? 'none' : '';
   docTypeSelect.style.display = isAzure ? '' : 'none';
-  docTypeLabel.style.display = isAzure ? '' : 'none';
+  docTypeLabel.style.display  = isAzure ? '' : 'none';
 });
 
-// ─── Version badge ────────────────────────────────────────────────
-fetch('/api/jobs/_').catch(()=>{});
-$('#versionBadge').textContent = 'DocVision Web UI';
-
-// ─── Tabs ─────────────────────────────────────────────────────────
+// ─── Tab switching ────────────────────────────────────────────────
 $$('.tab').forEach(tab => {
   tab.addEventListener('click', () => {
     $$('.tab').forEach(t => t.classList.remove('active'));
     $$('.panel').forEach(p => p.classList.remove('active'));
     tab.classList.add('active');
     $(`#panel-${tab.dataset.tab}`).classList.add('active');
+    if (tab.dataset.tab === 'history') loadHistory();
+    if (tab.dataset.tab === 'costs') {
+      loadCosts();
+      if (!costRefreshTimer) costRefreshTimer = setInterval(loadCosts, 10000);
+    } else {
+      if (costRefreshTimer) { clearInterval(costRefreshTimer); costRefreshTimer = null; }
+    }
   });
 });
 
-// ─── File Selection ───────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────────
+//  FILE SELECTION (single + multi / drag-and-drop)
+// ──────────────────────────────────────────────────────────────────
 fileInput.addEventListener('change', e => {
-  if (e.target.files.length) pickFile(e.target.files[0]);
+  const files = Array.from(e.target.files);
+  if (!files.length) return;
+  files.length === 1 ? pickFile(files[0]) : pickFiles(files);
 });
 dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
 dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
 dropZone.addEventListener('drop', e => {
   e.preventDefault(); dropZone.classList.remove('dragover');
-  if (e.dataTransfer.files.length) pickFile(e.dataTransfer.files[0]);
+  const files = Array.from(e.dataTransfer.files);
+  files.length === 1 ? pickFile(files[0]) : pickFiles(files);
 });
 
 function pickFile(f) {
-  selectedFile = f;
-  const sizeMB = (f.size / 1024 / 1024).toFixed(2);
-  fileInfo.innerHTML = `<strong>📎 ${f.name}</strong> &nbsp;(${sizeMB} MB)`;
-  fileInfo.style.display = 'block';
+  selectedFile  = f;
+  selectedFiles = [];
   btnProcess.disabled = false;
+  btnProcess.style.display = '';
+  btnBatch.style.display   = 'none';
+  $('#fileListArea').style.display = 'none';
+  generatePreview(f);
 }
 
-// ─── Processing ───────────────────────────────────────────────────
+function pickFiles(files) {
+  selectedFiles = files;
+  selectedFile  = null;
+  btnProcess.style.display = 'none';
+  btnBatch.style.display   = '';
+  btnBatch.disabled = false;
+  $('#previewArea').style.display   = 'none';
+  $('#fileListArea').style.display  = 'block';
+  renderFileList();
+}
+
+function renderFileList() {
+  const el = $('#fileList');
+  el.innerHTML = selectedFiles.map((f, i) => {
+    const kb  = (f.size / 1024).toFixed(0);
+    const ext = f.name.split('.').pop().toUpperCase();
+    return `<div class="file-item">
+      <span>${ext === 'PDF' ? '📄' : '🖼'}</span>
+      <span class="name">${esc(f.name)}</span>
+      <span class="size">${kb} KB</span>
+      <span class="remove" onclick="removeFile(${i})">✕</span>
+    </div>`;
+  }).join('');
+}
+
+function removeFile(idx) {
+  selectedFiles = selectedFiles.filter((_, i) => i !== idx);
+  if (selectedFiles.length === 0) {
+    $('#fileListArea').style.display = 'none';
+    btnBatch.style.display = 'none';
+  } else if (selectedFiles.length === 1) {
+    pickFile(selectedFiles[0]);
+  } else {
+    renderFileList();
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────
+//  PDF / IMAGE PREVIEW
+// ──────────────────────────────────────────────────────────────────
+async function generatePreview(f) {
+  const area   = $('#previewArea');
+  const sizeMB = (f.size / 1024 / 1024).toFixed(2);
+  const ext    = f.name.split('.').pop().toUpperCase();
+  area.style.display = 'block';
+  area.innerHTML = `<div class="preview-area">
+    <div class="preview-info">
+      <div class="filename">📎 ${esc(f.name)}</div>
+      <div class="meta">${sizeMB} MB · ${ext}<br><span id="previewPageInfo"></span></div>
+    </div>
+  </div>`;
+
+  // For images, show inline preview immediately
+  if (['JPG','JPEG','PNG','BMP','WEBP'].includes(ext)) {
+    try {
+      const url = URL.createObjectURL(f);
+      const thumb = document.createElement('img');
+      thumb.src = url;
+      thumb.className = 'preview-thumb';
+      thumb.onclick = () => showLightbox(url);
+      area.querySelector('.preview-area').prepend(thumb);
+    } catch {}
+    return;
+  }
+
+  // For PDFs, request server-side thumbnail
+  try {
+    const form = new FormData();
+    form.append('file', f);
+    const res = await fetch('/api/preview', { method: 'POST', body: form });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.preview) {
+        const thumb = document.createElement('img');
+        thumb.src = data.preview;
+        thumb.className = 'preview-thumb';
+        thumb.onclick = () => showLightbox(data.preview);
+        area.querySelector('.preview-area').prepend(thumb);
+      }
+      const info = $('#previewPageInfo');
+      if (info && data.pages) info.textContent = `${data.pages} page${data.pages > 1 ? 's' : ''}`;
+    }
+  } catch (e) { console.warn('Preview error:', e); }
+}
+
+// ──────────────────────────────────────────────────────────────────
+//  SINGLE-FILE PROCESSING
+// ──────────────────────────────────────────────────────────────────
 btnProcess.addEventListener('click', async () => {
   if (!selectedFile) return;
-
-  // Collect options
   const form = new FormData();
   form.append('file', selectedFile);
   form.append('processing_mode', modeSelect.value);
@@ -423,10 +592,7 @@ btnProcess.addEventListener('click', async () => {
   });
 
   btnProcess.disabled = true;
-  statusBar.classList.add('show');
-  statusText.textContent = 'Uploading & starting processing…';
-  processStart = Date.now();
-  updateTimer();
+  showStatus('Uploading & starting processing…');
 
   try {
     const res = await fetch('/api/process', { method: 'POST', body: form });
@@ -441,351 +607,548 @@ btnProcess.addEventListener('click', async () => {
   }
 });
 
-function updateTimer() {
+// ──────────────────────────────────────────────────────────────────
+//  BATCH PROCESSING
+// ──────────────────────────────────────────────────────────────────
+btnBatch.addEventListener('click', async () => {
+  if (!selectedFiles.length) return;
+  const form = new FormData();
+  selectedFiles.forEach(f => form.append('files', f));
+  form.append('processing_mode', modeSelect.value);
+  form.append('document_type', docTypeSelect.value);
+
+  btnBatch.disabled = true;
+  showStatus(`Uploading ${selectedFiles.length} files…`);
+
+  try {
+    const res = await fetch('/api/process/batch', { method: 'POST', body: form });
+    if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
+    const data = await res.json();
+    statusText.textContent = `Processing ${data.count} documents…`;
+    pollBatchStatus(data.job_ids);
+  } catch (err) {
+    statusText.textContent = `❌ Error: ${err.message}`;
+    btnBatch.disabled = false;
+  }
+});
+
+async function pollBatchStatus(jobIds) {
+  let allDone = true, completed = 0, failed = 0, processing = 0;
+  for (const jid of jobIds) {
+    try {
+      const r = await fetch(`/api/jobs/${jid}`);
+      const j = await r.json();
+      if (j.status === 'completed') completed++;
+      else if (j.status === 'failed') failed++;
+      else { processing++; allDone = false; }
+    } catch { allDone = false; processing++; }
+  }
+  statusText.textContent = `Batch: ${completed} done, ${processing} processing, ${failed} failed`;
+  if (allDone) {
+    statusText.textContent = `✅ Batch complete! ${completed} succeeded, ${failed} failed`;
+    setTimeout(() => statusBar.classList.remove('show'), 4000);
+    btnBatch.disabled = false;
+    for (let i = jobIds.length - 1; i >= 0; i--) {
+      try {
+        const r = await fetch(`/api/jobs/${jobIds[i]}`);
+        const j = await r.json();
+        if (j.status === 'completed') { currentJobId = jobIds[i]; await loadResult(); await loadArtifacts(); break; }
+      } catch {}
+    }
+    loadCosts(); loadHistory();
+  } else {
+    setTimeout(() => pollBatchStatus(jobIds), 2000);
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────
+//  STATUS BAR & POLLING
+// ──────────────────────────────────────────────────────────────────
+function showStatus(msg) {
+  statusBar.classList.add('show');
+  statusText.textContent = msg;
+  processStart = Date.now();
+  tickTimer();
+}
+
+function tickTimer() {
   if (!statusBar.classList.contains('show')) return;
-  const elapsed = ((Date.now() - processStart) / 1000).toFixed(0);
-  statusTime.textContent = `${elapsed}s`;
-  requestAnimationFrame(() => setTimeout(updateTimer, 500));
+  statusTime.textContent = ((Date.now() - processStart) / 1000).toFixed(0) + 's';
+  requestAnimationFrame(() => setTimeout(tickTimer, 500));
 }
 
 async function pollStatus() {
   try {
     const res = await fetch(`/api/jobs/${currentJobId}`);
     const job = await res.json();
-
     if (job.status === 'completed') {
       statusText.textContent = '✅ Processing complete!';
       setTimeout(() => statusBar.classList.remove('show'), 3000);
       btnProcess.disabled = false;
       await loadResult();
       await loadArtifacts();
-      // Refresh cost data after processing
       loadCosts();
-      // Auto-switch to artifacts tab
-      $$('.tab')[1].click();
+      $$('.tab')[1].click(); // switch to Artifacts
     } else if (job.status === 'failed') {
       statusText.textContent = `❌ Failed: ${job.error}`;
       btnProcess.disabled = false;
     } else {
       setTimeout(pollStatus, 1500);
     }
-  } catch {
-    setTimeout(pollStatus, 2000);
-  }
+  } catch { setTimeout(pollStatus, 2000); }
 }
 
-// ─── Load Result ──────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────────
+//  LOAD RESULT + ARTIFACTS
+// ──────────────────────────────────────────────────────────────────
 async function loadResult() {
   const res = await fetch(`/api/jobs/${currentJobId}/result`);
   currentResult = await res.json();
   renderOutput();
 }
 
-// ─── Load Artifacts ───────────────────────────────────────────────
 async function loadArtifacts() {
   const res = await fetch(`/api/jobs/${currentJobId}/artifacts`);
   const data = await res.json();
-  renderArtifacts(data.artifacts);
+  renderArtifacts(data.artifacts || []);
 }
 
-// ─── Render Artifacts ─────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────────
+//  CONFIDENCE HELPERS
+// ──────────────────────────────────────────────────────────────────
+function confClass(c) { return c >= 0.8 ? 'high' : c >= 0.5 ? 'mid' : 'low'; }
+function confBadge(c) { return `<span class="conf-badge ${confClass(c)}">${(c * 100).toFixed(0)}%</span>`; }
+
+// ──────────────────────────────────────────────────────────────────
+//  RENDER ARTIFACTS  (with confidence highlighting)
+// ──────────────────────────────────────────────────────────────────
 function renderArtifacts(artifacts) {
   const el = $('#artifactsContent');
-  if (!artifacts.length) {
-    el.innerHTML = '<div class="empty"><div class="icon">🔍</div><p>No artifacts generated</p></div>';
+  if (!artifacts.length && !currentResult) {
+    el.innerHTML = '<div class="empty"><div class="icon">🔍</div><p>Upload and process a document first</p></div>';
     return;
   }
-
-  // Group by page
-  const pages = {};
-  artifacts.forEach(a => {
-    const m = a.name.match(/page_(\d+)/);
-    const pageNum = m ? parseInt(m[1]) : 0;
-    if (!pages[pageNum]) pages[pageNum] = [];
-    pages[pageNum].push(a);
-  });
-
   let html = '';
+
+  // Stats row
   if (currentResult) {
     html += '<div class="stats">';
     html += stat('Pages', currentResult.page_count || 0);
     html += stat('Text Lines', countLines());
-    html += stat('Tables', (currentResult.tables || []).length);
+    html += stat('Tables', countTables());
     html += stat('Fields', (currentResult.fields || []).length);
     html += stat('Time', (currentResult.metadata?.processing_time_seconds || 0).toFixed(1) + 's');
     html += '</div>';
+
+    // Confidence legend
+    html += `<div class="conf-legend">
+      Confidence: <span class="dot" style="background:var(--conf-high)"></span> High (≥80%)
+      <span class="dot" style="background:var(--conf-mid)"></span> Medium (50-79%)
+      <span class="dot" style="background:var(--conf-low)"></span> Low (&lt;50%)
+    </div>`;
+
+    // Per-page confidence summary with low-confidence line details
+    if (currentResult.pages) {
+      currentResult.pages.forEach((page, pi) => {
+        const pageNum = page.page_number || (pi + 1);
+        const lines = page.text_lines || [];
+        if (!lines.length) return;
+        const lowLines = lines.filter(l => (l.confidence||0) < 0.5);
+        const midLines = lines.filter(l => (l.confidence||0) >= 0.5 && (l.confidence||0) < 0.8);
+        const highCount = lines.length - midLines.length - lowLines.length;
+        if (lowLines.length || midLines.length) {
+          html += `<div style="margin:10px 0;padding:10px 14px;background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);font-size:.84rem">`;
+          html += `<strong>Page ${pageNum}</strong> — ${lines.length} lines: `;
+          html += `<span class="conf-high">${highCount} high</span>, `;
+          html += `<span class="conf-mid">${midLines.length} medium</span>, `;
+          html += `<span class="conf-low">${lowLines.length} low</span>`;
+          if (lowLines.length) {
+            html += `<details style="margin-top:6px"><summary style="cursor:pointer;color:var(--error);font-size:.8rem">⚠ ${lowLines.length} low-confidence line(s)</summary>`;
+            html += `<div style="margin-top:6px;font-family:var(--mono);font-size:.78rem">`;
+            lowLines.forEach(l => {
+              html += `<div style="padding:3px 0;color:var(--conf-low)">• ${confBadge(l.confidence||0)} "${esc(l.text)}"</div>`;
+            });
+            html += '</div></details>';
+          }
+          html += '</div>';
+        }
+      });
+    }
   }
 
-  for (const [pageNum, arts] of Object.entries(pages)) {
-    html += `<h3 style="margin:20px 0 10px;color:var(--muted)">Page ${pageNum}</h3>`;
-    html += '<div class="artifacts-grid">';
-    for (const a of arts) {
-      const friendlyName = a.name.replace(/page_\d+_/, '').replace(/_/g, ' ');
-      html += `
-        <div class="artifact-card">
-          <img src="${a.url}" alt="${a.name}" onclick="showLightbox('${a.url}')" loading="lazy">
-          <div class="label">
-            <span>${friendlyName}</span>
-            <span>${a.size_kb} KB</span>
-          </div>
+  // Group artifacts by page
+  if (artifacts.length) {
+    const pages = {};
+    artifacts.forEach(a => {
+      const m = a.name.match(/page_(\d+)/);
+      const pn = m ? parseInt(m[1]) : 0;
+      if (!pages[pn]) pages[pn] = [];
+      pages[pn].push(a);
+    });
+
+    for (const [pageNum, arts] of Object.entries(pages)) {
+      html += `<h3 style="margin:20px 0 10px;color:var(--muted)">Page ${pageNum}</h3>`;
+      html += '<div class="artifacts-grid">';
+      for (const a of arts) {
+        const friendly = a.name.replace(/page_\d+_/, '').replace(/_/g, ' ');
+        html += `<div class="artifact-card">
+          <img src="${a.url}" alt="${esc(a.name)}" onclick="showLightbox('${a.url}')" loading="lazy">
+          <div class="label"><span>${friendly}</span><span>${a.size_kb} KB</span></div>
         </div>`;
+      }
+      html += '</div>';
     }
-    html += '</div>';
+  } else if (!currentResult) {
+    html += '<div class="empty"><div class="icon">🔍</div><p>No artifacts generated</p></div>';
   }
+
   el.innerHTML = html;
 }
 
-function stat(label, value) {
-  return `<div class="stat"><div class="value">${value}</div><div class="label">${label}</div></div>`;
-}
+function stat(lbl, val) { return `<div class="stat"><div class="value">${val}</div><div class="label">${lbl}</div></div>`; }
 function countLines() {
   if (!currentResult?.pages) return 0;
-  return currentResult.pages.reduce((s,p) => s + (p.text_lines?.length || 0), 0);
+  return currentResult.pages.reduce((s, p) => s + (p.text_lines?.length || 0), 0);
+}
+function countTables() {
+  if (currentResult?.tables) return currentResult.tables.length;
+  if (!currentResult?.pages) return 0;
+  return currentResult.pages.reduce((s, p) => s + (p.tables?.length || 0), 0);
 }
 
-// ─── Render JSON Output ───────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────────
+//  RENDER OUTPUT  (Fields ↔ JSON toggle)
+// ──────────────────────────────────────────────────────────────────
 function renderOutput() {
   const el = $('#outputContent');
-  const jsonStr = JSON.stringify(currentResult, null, 2);
+  if (!currentResult) {
+    el.innerHTML = '<div class="empty"><div class="icon">📝</div><p>No result yet</p></div>';
+    return;
+  }
 
-  el.innerHTML = `
+  let html = `
+    <div class="view-toggle">
+      <button class="vt-btn ${outputView === 'fields' ? 'active' : ''}" onclick="switchView('fields')">📋 Fields &amp; Tables</button>
+      <button class="vt-btn ${outputView === 'json' ? 'active' : ''}" onclick="switchView('json')">{ } JSON Editor</button>
+    </div>
     <div class="editor-toolbar">
-      <input class="search-box" id="jsonSearch" placeholder="🔍 Search in JSON…" oninput="highlightJson()">
-      <button class="btn btn-secondary btn-sm" onclick="formatJson()">Format</button>
-      <button class="btn btn-secondary btn-sm" onclick="collapseJson()">Collapse</button>
-      <button class="btn btn-success btn-sm" onclick="saveEdits()">💾 Save Edits</button>
+      <button class="btn btn-success btn-sm" onclick="saveAllEdits()">💾 Save Edits</button>
       <button class="btn btn-primary btn-sm" onclick="saveToDisk()">📂 Save to Disk</button>
       <button class="btn btn-secondary btn-sm" onclick="downloadJson()">⬇ Download</button>
-    </div>
-    <textarea class="json-editor" id="jsonEditor" spellcheck="false">${escHtml(jsonStr)}</textarea>
-    <div class="json-status" id="jsonStatus"></div>
-  `;
+    </div>`;
 
-  // Validate on input
-  $('#jsonEditor').addEventListener('input', validateJson);
-  validateJson();
+  html += outputView === 'fields' ? renderFieldEditor() : renderJsonEditor();
+  html += '<div class="json-status" id="jsonStatus"></div>';
+  el.innerHTML = html;
+
+  if (outputView === 'json') {
+    const ed = $('#jsonEditor');
+    if (ed) { ed.addEventListener('input', validateJson); validateJson(); }
+  }
 }
 
-function escHtml(s) {
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+function switchView(view) {
+  if (outputView === 'json' && view === 'fields') {
+    const ed = $('#jsonEditor');
+    if (ed) { try { currentResult = JSON.parse(ed.value); } catch {} }
+  }
+  if (outputView === 'fields' && view === 'json') syncFieldEdits();
+  outputView = view;
+  renderOutput();
+}
+
+// ── Field Editor view ─────────────────────────────────────────────
+function renderFieldEditor() {
+  let html = '';
+  const fields = currentResult.fields || [];
+  const tables = currentResult.tables || [];
+
+  // ─ Fields ─
+  if (fields.length) {
+    html += `<div class="cost-section"><h3>📋 Extracted Fields (${fields.length})</h3></div>`;
+    html += `<div class="conf-legend">
+      Confidence: <span class="dot" style="background:var(--conf-high)"></span> High
+      <span class="dot" style="background:var(--conf-mid)"></span> Medium
+      <span class="dot" style="background:var(--conf-low)"></span> Low — edit inline to correct
+    </div>`;
+    html += '<div class="field-grid">';
+    fields.forEach((f, i) => {
+      const c = f.confidence || 0;
+      const cls = c < 0.5 ? 'low-conf' : c < 0.8 ? 'mid-conf' : '';
+      const src = f.source ? `<span class="field-source">${f.source}</span>` : '';
+      html += `<div class="field-card ${cls}">
+        <div class="field-header">
+          <span class="field-name">${esc(f.name || 'unnamed')}</span>
+          ${confBadge(c)}
+        </div>
+        <input class="field-input" data-field-idx="${i}" value="${escAttr(f.value ?? '')}" placeholder="(empty)">
+        <div class="field-meta">
+          <span>Type: ${f.field_type || 'string'}</span>
+          ${f.status ? `<span>Status: ${f.status}</span>` : ''}
+          ${src}
+        </div>
+      </div>`;
+    });
+    html += '</div>';
+  } else {
+    html += '<div style="margin:20px 0;padding:20px;background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);color:var(--muted);text-align:center">No fields extracted — try Azure mode or enable Donut / LayoutLMv3 KIE</div>';
+  }
+
+  // ─ Tables ─
+  if (tables.length) {
+    html += `<div class="cost-section"><h3>📊 Tables (${tables.length})</h3></div>`;
+    tables.forEach((table, ti) => {
+      const cells = table.cells || [];
+      html += `<div style="margin-bottom:20px">`;
+      html += `<div style="font-size:.85rem;color:var(--muted);margin-bottom:8px">Table ${ti + 1} — ${table.row_count || table.rows || '?'} rows × ${table.col_count || table.columns || '?'} cols ${confBadge(table.confidence || 0)}</div>`;
+      if (cells.length) {
+        const maxR = Math.max(...cells.map(c => c.row));
+        const maxC = Math.max(...cells.map(c => c.col || c.column || 0));
+        html += '<div style="overflow-x:auto"><table class="result-table"><tbody>';
+        for (let r = 0; r <= maxR; r++) {
+          html += '<tr>';
+          for (let c = 0; c <= maxC; c++) {
+            const cell = cells.find(x => x.row === r && (x.col === c || x.column === c));
+            const txt = cell?.text || '';
+            const cc = cell?.confidence || 0;
+            const tag = (cell?.is_header || r === 0) ? 'th' : 'td';
+            html += `<${tag}><input data-table="${ti}" data-row="${r}" data-col="${c}" value="${escAttr(txt)}" style="color:var(--conf-${confClass(cc)})"></${tag}>`;
+          }
+          html += '</tr>';
+        }
+        html += '</tbody></table></div>';
+      }
+      html += '</div>';
+    });
+  }
+
+  // ─ Text lines per page (collapsible) ─
+  if (currentResult.pages) {
+    html += '<div class="cost-section"><h3>📃 Text Lines by Page</h3></div>';
+    currentResult.pages.forEach((page, pi) => {
+      const lines = page.text_lines || [];
+      if (!lines.length) return;
+      html += `<details style="margin-bottom:10px"><summary style="cursor:pointer;color:var(--muted);font-size:.88rem;padding:6px 0">Page ${page.page_number || pi + 1} — ${lines.length} lines</summary><div style="margin-top:6px">`;
+      lines.forEach(l => {
+        const c = l.confidence || 0;
+        html += `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:.84rem">
+          ${confBadge(c)}
+          <span style="color:var(--conf-${confClass(c)});font-family:var(--mono);font-size:.8rem">${esc(l.text)}</span>
+          <span style="color:var(--muted);font-size:.72rem;margin-left:auto">${l.content_type || ''}</span>
+        </div>`;
+      });
+      html += '</div></details>';
+    });
+  }
+
+  return html;
+}
+
+// ── JSON Editor view ──────────────────────────────────────────────
+function renderJsonEditor() {
+  const jsonStr = JSON.stringify(currentResult, null, 2);
+  return `
+    <div style="display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap">
+      <input style="flex:1;min-width:200px;padding:8px 14px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:.88rem;font-family:var(--mono)"
+             id="jsonSearch" placeholder="🔍 Search in JSON…" oninput="highlightJson()">
+      <button class="btn btn-secondary btn-sm" onclick="formatJson()">Format</button>
+      <button class="btn btn-secondary btn-sm" onclick="collapseJson()">Collapse</button>
+    </div>
+    <textarea class="json-editor" id="jsonEditor" spellcheck="false">${esc(jsonStr)}</textarea>`;
+}
+
+function syncFieldEdits() {
+  if (!currentResult) return;
+  $$('.field-input[data-field-idx]').forEach(inp => {
+    const idx = parseInt(inp.dataset.fieldIdx);
+    if (currentResult.fields?.[idx]) currentResult.fields[idx].value = inp.value;
+  });
+  $$('input[data-table]').forEach(inp => {
+    const ti = parseInt(inp.dataset.table);
+    const row = parseInt(inp.dataset.row);
+    const col = parseInt(inp.dataset.col);
+    const cell = currentResult.tables?.[ti]?.cells?.find(c => c.row === row && (c.col === col || c.column === col));
+    if (cell) cell.text = inp.value;
+  });
 }
 
 function validateJson() {
-  const editor = $('#jsonEditor');
-  const status = $('#jsonStatus');
-  try {
-    JSON.parse(editor.value);
-    status.textContent = '✓ Valid JSON';
-    status.className = 'json-status valid';
-  } catch(e) {
-    status.textContent = '✗ ' + e.message;
-    status.className = 'json-status invalid';
-  }
+  const ed = $('#jsonEditor'), st = $('#jsonStatus');
+  if (!ed || !st) return;
+  try { JSON.parse(ed.value); st.textContent = '✓ Valid JSON'; st.className = 'json-status valid'; }
+  catch (e) { st.textContent = '✗ ' + e.message; st.className = 'json-status invalid'; }
 }
-
 function formatJson() {
-  const editor = $('#jsonEditor');
-  try {
-    const obj = JSON.parse(editor.value);
-    editor.value = JSON.stringify(obj, null, 2);
-    validateJson();
-  } catch {}
+  const ed = $('#jsonEditor');
+  try { ed.value = JSON.stringify(JSON.parse(ed.value), null, 2); validateJson(); } catch {}
 }
-
 function collapseJson() {
-  const editor = $('#jsonEditor');
-  try {
-    const obj = JSON.parse(editor.value);
-    editor.value = JSON.stringify(obj);
-    validateJson();
-  } catch {}
+  const ed = $('#jsonEditor');
+  try { ed.value = JSON.stringify(JSON.parse(ed.value)); validateJson(); } catch {}
+}
+function highlightJson() {
+  const term = $('#jsonSearch')?.value;
+  if (!term) return;
+  const ed = $('#jsonEditor');
+  const idx = ed.value.toLowerCase().indexOf(term.toLowerCase());
+  if (idx !== -1) {
+    ed.focus(); ed.setSelectionRange(idx, idx + term.length);
+    ed.scrollTop = ed.value.substring(0, idx).split('\n').length * 18 - 100;
+  }
 }
 
-async function saveEdits() {
-  const editor = $('#jsonEditor');
-  try {
-    const obj = JSON.parse(editor.value);
-    const res = await fetch(`/api/jobs/${currentJobId}/result`, {
-      method: 'PUT',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(obj)
-    });
-    if (res.ok) {
-      currentResult = obj;
-      const status = $('#jsonStatus');
-      status.textContent = '✓ Saved successfully';
-      status.className = 'json-status valid';
-    }
-  } catch(e) {
-    alert('Fix JSON errors before saving');
+// ──────────────────────────────────────────────────────────────────
+//  SAVE / DOWNLOAD
+// ──────────────────────────────────────────────────────────────────
+async function saveAllEdits() {
+  if (!currentJobId) return;
+  if (outputView === 'fields') syncFieldEdits();
+  else {
+    const ed = $('#jsonEditor');
+    if (ed) { try { currentResult = JSON.parse(ed.value); } catch { return alert('Fix JSON errors before saving'); } }
   }
+  const res = await fetch(`/api/jobs/${currentJobId}/result`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(currentResult)
+  });
+  if (res.ok) { const st = $('#jsonStatus'); if (st) { st.textContent = '✓ Saved successfully'; st.className = 'json-status valid'; } }
 }
 
 function downloadJson() {
-  const editor = $('#jsonEditor');
-  try {
-    const obj = JSON.parse(editor.value);
-    const blob = new Blob([JSON.stringify(obj, null, 2)], {type: 'application/json'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = (currentResult?.metadata?.filename || 'document').replace(/\.[^.]+$/, '') + '_result.json';
-    a.click();
-    URL.revokeObjectURL(url);
-  } catch {
-    alert('Fix JSON errors before downloading');
-  }
-}
-
-function highlightJson() {
-  // Simple scroll-to for search
-  const term = $('#jsonSearch').value;
-  if (!term) return;
-  const editor = $('#jsonEditor');
-  const idx = editor.value.toLowerCase().indexOf(term.toLowerCase());
-  if (idx !== -1) {
-    editor.focus();
-    editor.setSelectionRange(idx, idx + term.length);
-    // Scroll to selection
-    const linesBefore = editor.value.substring(0, idx).split('\n').length;
-    editor.scrollTop = linesBefore * 18 - 100;
-  }
+  if (!currentResult) return;
+  const blob = new Blob([JSON.stringify(currentResult, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url;
+  a.download = (currentResult?.metadata?.filename || 'document').replace(/\.[^.]+$/, '') + '_result.json';
+  a.click(); URL.revokeObjectURL(url);
 }
 
 async function saveToDisk() {
   if (!currentJobId) return alert('No processed document to save');
-  // Save any pending edits first
-  const editor = $('#jsonEditor');
-  if (editor) {
-    try {
-      const obj = JSON.parse(editor.value);
-      await fetch(`/api/jobs/${currentJobId}/result`, {
-        method: 'PUT',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(obj)
-      });
-      currentResult = obj;
-    } catch {
-      return alert('Fix JSON errors before saving to disk');
-    }
+  if (outputView === 'fields') syncFieldEdits();
+  else {
+    const ed = $('#jsonEditor');
+    if (ed) { try { currentResult = JSON.parse(ed.value); } catch { return alert('Fix JSON errors first'); } }
   }
+  await fetch(`/api/jobs/${currentJobId}/result`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(currentResult)
+  });
   try {
     const res = await fetch(`/api/jobs/${currentJobId}/save`, { method: 'POST' });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.detail || 'Save failed');
-    }
+    if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'Save failed'); }
     const data = await res.json();
-    const status = $('#jsonStatus');
-    if (status) {
-      status.textContent = `✓ Saved to ${data.path}`;
-      status.className = 'json-status valid';
-    }
-  } catch (e) {
-    alert('Failed to save: ' + e.message);
-  }
+    const st = $('#jsonStatus');
+    if (st) { st.textContent = `✓ Saved to ${data.path}`; st.className = 'json-status valid'; }
+  } catch (e) { alert('Failed to save: ' + e.message); }
 }
 
-// ─── Cost & Usage Dashboard ───────────────────────────────────────
-let costRefreshTimer = null;
+// ──────────────────────────────────────────────────────────────────
+//  HISTORY PANEL
+// ──────────────────────────────────────────────────────────────────
+async function loadHistory() {
+  try {
+    const res = await fetch('/api/history');
+    if (!res.ok) return;
+    renderHistory((await res.json()).jobs);
+  } catch (e) { console.warn('History load error:', e); }
+}
 
+function renderHistory(jobs) {
+  const tbody = $('#historyTableBody');
+  if (!jobs?.length) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:40px">No documents processed yet</td></tr>';
+    return;
+  }
+  tbody.innerHTML = jobs.map(j => {
+    const mode = j.processing_mode === 'azure' ? '☁ Azure' : '🖥 Local';
+    const dot  = `<span class="status-dot ${j.status}"></span>${j.status}`;
+    const time = j.processing_time ? j.processing_time.toFixed(1) + 's' : '—';
+    const created = j.created ? new Date(j.created).toLocaleString() : '—';
+    return `<tr onclick="loadJob('${j.job_id}')">
+      <td><strong>${esc(j.filename)}</strong></td>
+      <td>${mode}</td><td>${dot}</td>
+      <td>${j.page_count ?? '—'}</td><td>${j.text_lines ?? '—'}</td>
+      <td>${j.tables ?? '—'}</td><td>${j.fields ?? '—'}</td>
+      <td style="font-family:var(--mono);font-size:.8rem">${time}</td>
+      <td style="font-size:.8rem;color:var(--muted)">${created}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function loadJob(jobId) {
+  currentJobId = jobId;
+  try { await loadResult(); await loadArtifacts(); $$('.tab')[1].click(); }
+  catch (e) { alert('Could not load job: ' + e.message); }
+}
+
+// ──────────────────────────────────────────────────────────────────
+//  COST & USAGE DASHBOARD
+// ──────────────────────────────────────────────────────────────────
 async function loadCosts() {
   try {
     const res = await fetch('/api/costs');
     if (!res.ok) return;
-    const data = await res.json();
-    renderCosts(data);
-  } catch (e) {
-    console.warn('Failed to load costs:', e);
-  }
+    renderCosts(await res.json());
+  } catch (e) { console.warn('Costs load error:', e); }
 }
 
 function renderCosts(data) {
   const c = data.costs || {};
   const cache = data.cache || {};
 
-  // Summary cards
-  $('#ccTotalCost').textContent = '$' + (c.estimated_cost_usd || 0).toFixed(4);
+  $('#ccTotalCost').textContent  = '$' + (c.estimated_cost_usd || 0).toFixed(4);
   $('#ccTotalCalls').textContent = c.total_calls || 0;
-  $('#ccDICalls').textContent = c.total_di_calls || 0;
-  $('#ccGPTCalls').textContent = c.total_gpt_calls || 0;
-  $('#ccPages').textContent = c.total_pages_analysed || 0;
-  $('#ccTokens').textContent = (c.total_tokens || 0).toLocaleString();
-  $('#ccCacheHits').textContent = c.cache_hits || 0;
-  $('#ccSaved').textContent = '$' + (c.cost_saved_by_cache_usd || 0).toFixed(4);
+  $('#ccDICalls').textContent    = c.total_di_calls || 0;
+  $('#ccGPTCalls').textContent   = c.total_gpt_calls || 0;
+  $('#ccPages').textContent      = c.total_pages_analysed || 0;
+  $('#ccTokens').textContent     = (c.total_tokens || 0).toLocaleString();
+  $('#ccCacheHits').textContent  = c.cache_hits || 0;
+  $('#ccSaved').textContent      = '$' + (c.cost_saved_by_cache_usd || 0).toFixed(4);
 
-  // Cache performance bar
-  const hits = cache.hits || 0;
-  const misses = cache.misses || 0;
-  const total = hits + misses;
+  const hits = cache.hits || 0, misses = cache.misses || 0, total = hits + misses;
   const hitPct = total > 0 ? (hits / total * 100) : 0;
-  const missPct = total > 0 ? (misses / total * 100) : 0;
-  $('#cacheHitBar').style.width = hitPct + '%';
-  $('#cacheMissBar').style.width = missPct + '%';
-  $('#cacheHitPct').textContent = hitPct.toFixed(0) + '% hits (' + hits + ')';
-  $('#cacheMissPct').textContent = missPct.toFixed(0) + '% misses (' + misses + ')';
+  $('#cacheHitBar').style.width  = hitPct + '%';
+  $('#cacheMissBar').style.width = (100 - hitPct) + '%';
+  $('#cacheHitPct').textContent  = hitPct.toFixed(0) + '% hits (' + hits + ')';
+  $('#cacheMissPct').textContent = (100 - hitPct).toFixed(0) + '% misses (' + misses + ')';
   $('#cacheEntries').textContent = cache.entries || 0;
-  $('#cacheStatus').textContent = cache.enabled ? '✓ Active' : '○ Inactive';
-  $('#cacheStatus').style.color = cache.enabled ? 'var(--success)' : 'var(--muted)';
+  const cs = $('#cacheStatus');
+  cs.textContent = cache.enabled ? '✓ Active' : '○ Inactive';
+  cs.style.color = cache.enabled ? 'var(--success)' : 'var(--muted)';
 
-  // Cost breakdown by service
   const records = c.records || [];
   let diCost = 0, gptCost = 0, diPages = 0, gptTokens = 0;
   records.forEach(r => {
-    if (r.service === 'doc_intelligence') {
-      diCost += r.estimated_cost_usd;
-      diPages += r.pages;
-    } else if (r.service === 'gpt_vision') {
-      gptCost += r.estimated_cost_usd;
-      gptTokens += r.prompt_tokens + r.completion_tokens;
-    }
+    if (r.service === 'doc_intelligence') { diCost += r.estimated_cost_usd; diPages += r.pages; }
+    else if (r.service === 'gpt_vision') { gptCost += r.estimated_cost_usd; gptTokens += (r.prompt_tokens || 0) + (r.completion_tokens || 0); }
   });
-  $('#bdDICalls').textContent = c.total_di_calls || 0;
-  $('#bdDIPages').textContent = diPages;
-  $('#bdDICost').textContent = '$' + diCost.toFixed(4);
+  $('#bdDICalls').textContent  = c.total_di_calls || 0;
+  $('#bdDIPages').textContent  = diPages;
+  $('#bdDICost').textContent   = '$' + diCost.toFixed(4);
   $('#bdGPTCalls').textContent = c.total_gpt_calls || 0;
   $('#bdGPTTokens').textContent = gptTokens.toLocaleString();
-  $('#bdGPTCost').textContent = '$' + gptCost.toFixed(4);
+  $('#bdGPTCost').textContent  = '$' + gptCost.toFixed(4);
 
-  // Call history table
   const tbody = $('#costTableBody');
   if (!records.length) {
     tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:30px">No API calls recorded yet</td></tr>';
     return;
   }
-
-  // Show newest first
-  const sorted = [...records].reverse();
-  tbody.innerHTML = sorted.map(r => {
-    const svcClass = r.service === 'doc_intelligence' ? 'svc-di' : 'svc-gpt';
-    const svcLabel = r.service === 'doc_intelligence' ? '🔍 DI' : '🤖 GPT';
+  tbody.innerHTML = [...records].reverse().map(r => {
+    const svcCls = r.service === 'doc_intelligence' ? 'svc-di' : 'svc-gpt';
+    const svcLbl = r.service === 'doc_intelligence' ? '🔍 DI' : '🤖 GPT';
     const detail = r.service === 'doc_intelligence'
-      ? r.pages + ' page' + (r.pages !== 1 ? 's' : '')
-      : (r.prompt_tokens + r.completion_tokens).toLocaleString() + ' tok';
-    const time = r.timestamp ? new Date(r.timestamp).toLocaleTimeString() : '—';
-    const cachedTag = r.cached ? '<span class="cached-tag">CACHED</span>' : '';
-    return `<tr>
-      <td class="time-col">${time}</td>
-      <td><span class="svc ${svcClass}">${svcLabel}</span></td>
-      <td>${r.model}</td>
-      <td>${detail}</td>
-      <td class="time-col">${r.latency_seconds.toFixed(1)}s</td>
-      <td>$${r.estimated_cost_usd.toFixed(4)}</td>
-      <td>${cachedTag}</td>
-    </tr>`;
+      ? (r.pages || 0) + ' page' + ((r.pages || 0) !== 1 ? 's' : '')
+      : ((r.prompt_tokens || 0) + (r.completion_tokens || 0)).toLocaleString() + ' tok';
+    const ts = r.timestamp ? new Date(r.timestamp).toLocaleTimeString() : '—';
+    const cached = r.cached ? '<span class="cached-tag">CACHED</span>' : '';
+    return `<tr><td class="time-col">${ts}</td><td><span class="svc ${svcCls}">${svcLbl}</span></td><td>${r.model || '—'}</td><td>${detail}</td><td class="time-col">${(r.latency_seconds || 0).toFixed(1)}s</td><td>$${(r.estimated_cost_usd || 0).toFixed(4)}</td><td>${cached}</td></tr>`;
   }).join('');
 }
 
 async function resetCosts() {
   if (!confirm('Reset all cost tracking counters?')) return;
-  try {
-    await fetch('/api/costs/reset', { method: 'POST' });
-    await loadCosts();
-  } catch (e) {
-    alert('Failed to reset: ' + e.message);
-  }
+  try { await fetch('/api/costs/reset', { method: 'POST' }); await loadCosts(); } catch (e) { alert('Failed: ' + e.message); }
 }
-
 async function clearCache() {
   if (!confirm('Clear the entire Azure response cache?')) return;
   try {
@@ -793,37 +1156,24 @@ async function clearCache() {
     const data = await res.json();
     alert(`Cache cleared — ${data.entries_cleared} entries removed`);
     await loadCosts();
-  } catch (e) {
-    alert('Failed to clear cache: ' + e.message);
-  }
+  } catch (e) { alert('Failed: ' + e.message); }
 }
 
-// Auto-refresh costs when the tab is active
-$$('.tab').forEach(tab => {
-  tab.addEventListener('click', () => {
-    if (tab.dataset.tab === 'costs') {
-      loadCosts();
-      if (!costRefreshTimer) {
-        costRefreshTimer = setInterval(loadCosts, 10000); // refresh every 10s
-      }
-    } else {
-      if (costRefreshTimer) {
-        clearInterval(costRefreshTimer);
-        costRefreshTimer = null;
-      }
-    }
-  });
-});
-
-// ─── Lightbox ─────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────────
+//  LIGHTBOX
+// ──────────────────────────────────────────────────────────────────
 function showLightbox(url) {
   lightboxImg.src = url;
   lightbox.classList.add('show');
 }
 lightbox.addEventListener('click', () => lightbox.classList.remove('show'));
-document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') lightbox.classList.remove('show');
-});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') lightbox.classList.remove('show'); });
+
+// ──────────────────────────────────────────────────────────────────
+//  UTILITY
+// ──────────────────────────────────────────────────────────────────
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escAttr(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 </script>
 </body>
 </html>

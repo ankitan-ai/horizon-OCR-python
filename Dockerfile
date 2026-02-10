@@ -49,8 +49,8 @@ COPY . .
 # Install the package
 RUN pip install --no-cache-dir -e .
 
-# Create directories for models, output, artifacts
-RUN mkdir -p /app/models /app/output /app/artifacts \
+# Create directories for models, output, artifacts, cache
+RUN mkdir -p /app/models /app/output /app/artifacts /app/.cache \
     && chown -R docvision:docvision /app
 
 # Switch to non-root user
@@ -62,15 +62,15 @@ USER docvision
 #     AutoProcessor.from_pretrained('microsoft/trocr-base-printed'); \
 #     AutoProcessor.from_pretrained('microsoft/trocr-base-handwritten')"
 
-# Expose API port
-EXPOSE 8000
+# Expose web UI port
+EXPOSE 8080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:8000/health').raise_for_status()" || exit 1
+    CMD python -c "import requests; requests.get('http://localhost:8080/health').raise_for_status()" || exit 1
 
-# Default command - run API server
-CMD ["python", "-m", "docvision.api.server"]
+# Default command - run web server
+CMD ["python", "-m", "uvicorn", "docvision.web.app:app", "--host", "0.0.0.0", "--port", "8080"]
 
 # Alternative commands:
 # CLI processing: docker run docvision docvision process /data/doc.pdf

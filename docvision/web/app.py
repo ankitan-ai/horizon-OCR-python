@@ -17,7 +17,7 @@ import tempfile
 import asyncio
 import shutil
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from datetime import datetime
 from contextlib import asynccontextmanager
 
@@ -193,6 +193,184 @@ async def process_document(
 
     asyncio.ensure_future(_run())
     return {"job_id": job_id}
+
+
+# ---------------------------------------------------------------------------
+# API: batch upload + process
+# ---------------------------------------------------------------------------
+from fastapi import Body
+
+
+@app.post("/api/process/batch")
+async def process_batch(
+    files: List[UploadFile] = File(...),
+    processing_mode: str = Form("local"),
+    document_type: str = Form("auto"),
+):
+    """Upload multiple documents, process each, return list of job_ids."""
+    if _processor is None:
+        raise HTTPException(503, "Service not initialised")
+
+    allowed = {".pdf", ".jpg", ".jpeg", ".png", ".tiff", ".tif", ".bmp", ".webp"}
+    job_ids = []
+
+    for file in files:
+        suffix = Path(file.filename).suffix.lower()
+        if suffix not in allowed:
+            continue  # skip unsupported
+
+        job_id = str(uuid.uuid4())[:12]
+        content = await file.read()
+
+        content_hash = hashlib.sha256(content).hexdigest()[:16]
+        upload_path = UPLOAD_DIR / f"{content_hash}{suffix}"
+        if not upload_path.exists():
+            upload_path.write_bytes(content)
+
+        mode_subfolder = "Azure_Cloud" if processing_mode == "azure" else "Local"
+
+        _jobs[job_id] = {
+            "status": "queued",
+            "filename": file.filename,
+            "processing_mode": processing_mode,
+            "created": datetime.utcnow().isoformat(),
+            "result": None,
+            "error": None,
+            "artifacts_dir": None,
+        }
+        job_ids.append(job_id)
+
+        # Schedule processing
+        import concurrent.futures
+        loop = asyncio.get_event_loop()
+        _upload_path = str(upload_path)
+        _mode = processing_mode
+        _dtype = document_type
+        _jid = job_id
+        _msub = mode_subfolder
+
+        async def _run_batch(jid=_jid, upath=_upload_path, mode=_mode, dtype=_dtype, msub=_msub):
+            _jobs[jid]["status"] = "processing"
+            try:
+                opts = ProcessingOptions(
+                    processing_mode=mode,
+                    document_type=dtype,
+                    save_artifacts=True,
+                    save_json=False,
+                )
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    result = await loop.run_in_executor(
+                        pool,
+                        lambda: _processor.process(upath, opts),
+                    )
+                if result.success:
+                    doc_dict = result.document.model_dump(mode="json")
+                    _jobs[jid]["status"] = "completed"
+                    _jobs[jid]["result"] = doc_dict
+                    _jobs[jid]["artifacts_dir"] = str(
+                        ARTIFACTS_BASE / msub / result.document.id
+                    )
+                else:
+                    _jobs[jid]["status"] = "failed"
+                    _jobs[jid]["error"] = result.error
+            except Exception as exc:
+                logger.exception(f"Batch processing failed for {jid}")
+                _jobs[jid]["status"] = "failed"
+                _jobs[jid]["error"] = str(exc)
+
+        asyncio.ensure_future(_run_batch())
+
+    return {"job_ids": job_ids, "count": len(job_ids)}
+
+
+# ---------------------------------------------------------------------------
+# API: PDF thumbnail preview
+# ---------------------------------------------------------------------------
+@app.post("/api/preview")
+async def preview_file(file: UploadFile = File(...)):
+    """Return a base64 thumbnail of the first page of an uploaded file."""
+    allowed = {".pdf", ".jpg", ".jpeg", ".png", ".tiff", ".tif", ".bmp", ".webp"}
+    suffix = Path(file.filename).suffix.lower()
+    if suffix not in allowed:
+        raise HTTPException(400, f"Unsupported file type: {suffix}")
+
+    content = await file.read()
+
+    try:
+        from PIL import Image
+        import io
+
+        if suffix == ".pdf":
+            # Try pdf2image first, fall back to fitz
+            try:
+                from pdf2image import convert_from_bytes
+                images = convert_from_bytes(content, first_page=1, last_page=1, dpi=120)
+                img = images[0]
+                page_count = len(convert_from_bytes(content, dpi=30))
+            except ImportError:
+                try:
+                    import fitz
+                    doc = fitz.open(stream=content, filetype="pdf")
+                    page_count = len(doc)
+                    pix = doc[0].get_pixmap(dpi=120)
+                    img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+                    doc.close()
+                except ImportError:
+                    return {"preview": None, "pages": 0, "error": "No PDF renderer available"}
+        else:
+            img = Image.open(io.BytesIO(content))
+            page_count = 1
+
+        # Create thumbnail
+        img.thumbnail((400, 500), Image.Resampling.LANCZOS)
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        b64 = base64.b64encode(buf.getvalue()).decode()
+
+        return {
+            "preview": f"data:image/png;base64,{b64}",
+            "pages": page_count,
+            "width": img.width,
+            "height": img.height,
+        }
+    except Exception as e:
+        logger.warning(f"Preview generation failed: {e}")
+        return {"preview": None, "pages": 0, "error": str(e)}
+
+
+# ---------------------------------------------------------------------------
+# API: history (list all jobs)
+# ---------------------------------------------------------------------------
+@app.get("/api/history")
+async def list_history():
+    """Return a list of all jobs for the history panel."""
+    jobs_list = []
+    for jid, job in _jobs.items():
+        entry = {
+            "job_id": jid,
+            "filename": job["filename"],
+            "processing_mode": job.get("processing_mode", "local"),
+            "status": job["status"],
+            "created": job["created"],
+            "has_result": job["result"] is not None,
+        }
+        # Add summary stats if result exists
+        if job["result"]:
+            r = job["result"]
+            entry["page_count"] = r.get("page_count", 0)
+            entry["text_lines"] = sum(
+                len(p.get("text_lines", [])) for p in r.get("pages", [])
+            )
+            entry["tables"] = len(r.get("tables", []))
+            entry["fields"] = len(r.get("fields", []))
+            entry["processing_time"] = r.get("metadata", {}).get(
+                "processing_time_seconds", 0
+            )
+        jobs_list.append(entry)
+
+    # Newest first
+    jobs_list.sort(key=lambda x: x["created"], reverse=True)
+    return {"jobs": jobs_list, "total": len(jobs_list)}
 
 
 # ---------------------------------------------------------------------------
