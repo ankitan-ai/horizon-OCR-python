@@ -61,7 +61,12 @@ class AzureDocIntelligenceProvider:
         raw_text   = result["raw_text"]
     """
 
-    def __init__(self, azure_config: AzureConfig) -> None:
+    def __init__(
+        self,
+        azure_config: AzureConfig,
+        cost_tracker=None,
+        response_cache=None,
+    ) -> None:
         if not azure_config.is_azure_ready:
             raise ValueError(
                 "Azure Document Intelligence is not configured. "
@@ -71,6 +76,8 @@ class AzureDocIntelligenceProvider:
 
         self._config = azure_config
         self._client = None  # lazy
+        self.cost_tracker = cost_tracker
+        self.cache = response_cache
         logger.info(
             "AzureDocIntelligenceProvider initialised  "
             f"(model={azure_config.doc_intelligence_model}, "
@@ -85,10 +92,12 @@ class AzureDocIntelligenceProvider:
         if self._client is None:
             from azure.ai.documentintelligence import DocumentIntelligenceClient
             from azure.core.credentials import AzureKeyCredential
+            import certifi
 
             self._client = DocumentIntelligenceClient(
                 endpoint=self._config.doc_intelligence_endpoint,
                 credential=AzureKeyCredential(self._config.doc_intelligence_key),
+                connection_verify=certifi.where(),
             )
             logger.debug("Azure DocumentIntelligenceClient created")
         return self._client
@@ -118,6 +127,22 @@ class AzureDocIntelligenceProvider:
 
         image_bytes = self._encode_image(image)
         h, w = image.shape[:2]
+
+        # ── Check cache ─────────────────────────────────────────────
+        cache_key = None
+        if self.cache is not None:
+            cache_key = self.cache.make_key(
+                image_bytes, service="di", model=self._config.doc_intelligence_model
+            )
+            cached = self.cache.get(cache_key)
+            if cached is not None:
+                logger.info(f"Cache hit for DI page {page_num} — skipping API call")
+                if self.cost_tracker:
+                    self.cost_tracker.record_di_call(
+                        pages=1, model=self._config.doc_intelligence_model,
+                        latency=0.0, cached=True,
+                    )
+                return cached
 
         t0 = time.perf_counter()
         logger.info(
@@ -150,12 +175,27 @@ class AzureDocIntelligenceProvider:
             f"{len(layout_regions)} layout regions"
         )
 
-        return {
+        response = {
             "text_lines": text_lines,
             "tables": tables,
             "layout_regions": layout_regions,
             "raw_text": raw_text,
         }
+
+        # ── Record cost ─────────────────────────────────────────────
+        if self.cost_tracker:
+            self.cost_tracker.record_di_call(
+                pages=1, model=self._config.doc_intelligence_model,
+                latency=elapsed,
+            )
+
+        # ── Store in cache ──────────────────────────────────────────
+        if self.cache is not None and cache_key:
+            self.cache.put(cache_key, response, metadata={
+                "page_num": page_num, "width": w, "height": h,
+            })
+
+        return response
 
     def analyze_bytes(
         self,
@@ -169,6 +209,26 @@ class AzureDocIntelligenceProvider:
         to convert from numpy.  The response mapping is identical.
         """
         from azure.ai.documentintelligence.models import AnalyzeDocumentRequest
+
+        # ── Check cache ─────────────────────────────────────────────
+        cache_key = None
+        if self.cache is not None:
+            cache_key = self.cache.make_key(
+                file_bytes, service="di_batch", model=self._config.doc_intelligence_model
+            )
+            cached = self.cache.get(cache_key)
+            if cached is not None:
+                num_pages = len(cached.get("pages", [cached]))
+                logger.info(
+                    f"Cache hit for DI batch ({num_pages} page(s)) — skipping API call"
+                )
+                if self.cost_tracker:
+                    self.cost_tracker.record_di_call(
+                        pages=num_pages,
+                        model=self._config.doc_intelligence_model,
+                        latency=0.0, cached=True,
+                    )
+                return cached
 
         t0 = time.perf_counter()
         logger.info(
@@ -217,8 +277,26 @@ class AzureDocIntelligenceProvider:
 
         # If caller asked for a single page, return that; else full list
         if len(all_results) == 1:
-            return all_results[0]
-        return {"pages": all_results, "raw_text": result.content or ""}
+            response = all_results[0]
+        else:
+            response = {"pages": all_results, "raw_text": result.content or ""}
+
+        # ── Record cost (one call, N pages) ─────────────────────────
+        num_pages = len(all_results)
+        if self.cost_tracker:
+            self.cost_tracker.record_di_call(
+                pages=num_pages,
+                model=self._config.doc_intelligence_model,
+                latency=elapsed,
+            )
+
+        # ── Store in cache ──────────────────────────────────────────
+        if self.cache is not None and cache_key:
+            self.cache.put(cache_key, response, metadata={
+                "pages": num_pages,
+            })
+
+        return response
 
     # ── image encoding ───────────────────────────────────────────────────────
 

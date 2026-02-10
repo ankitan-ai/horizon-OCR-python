@@ -93,6 +93,10 @@ class DocumentProcessor:
         # Azure cloud providers (lazy)
         self._azure_di_provider = None
         self._gpt_vision_extractor = None
+
+        # Azure cost tracking and response caching
+        self._cost_tracker = None
+        self._response_cache = None
         
         logger.info(f"DocumentProcessor initialized with device: {self.device}")
     
@@ -230,11 +234,31 @@ class DocumentProcessor:
         return self._fuser
 
     @property
+    def cost_tracker(self):
+        """Lazy load cost tracker (shared across all Azure providers)."""
+        if self._cost_tracker is None:
+            from docvision.azure.cost_tracker import CostTracker
+            self._cost_tracker = CostTracker()
+        return self._cost_tracker
+
+    @property
+    def response_cache(self):
+        """Lazy load response cache (shared across all Azure providers)."""
+        if self._response_cache is None:
+            from docvision.azure.response_cache import ResponseCache
+            self._response_cache = ResponseCache()
+        return self._response_cache
+
+    @property
     def azure_di_provider(self):
         """Lazy load Azure Document Intelligence provider."""
         if self._azure_di_provider is None:
             from docvision.azure.doc_intelligence import AzureDocIntelligenceProvider
-            self._azure_di_provider = AzureDocIntelligenceProvider(self.config.azure)
+            self._azure_di_provider = AzureDocIntelligenceProvider(
+                self.config.azure,
+                cost_tracker=self.cost_tracker,
+                response_cache=self.response_cache,
+            )
         return self._azure_di_provider
 
     @property
@@ -242,7 +266,11 @@ class DocumentProcessor:
         """Lazy load GPT Vision KIE extractor."""
         if self._gpt_vision_extractor is None:
             from docvision.azure.gpt_vision_kie import GPTVisionExtractor
-            self._gpt_vision_extractor = GPTVisionExtractor(self.config.azure)
+            self._gpt_vision_extractor = GPTVisionExtractor(
+                self.config.azure,
+                cost_tracker=self.cost_tracker,
+                response_cache=self.response_cache,
+            )
         return self._gpt_vision_extractor
     
     def process(
@@ -292,6 +320,20 @@ class DocumentProcessor:
             pages = []
             all_tables = []
             all_fields_lists = []
+
+            # Set mode on artifact manager so artifacts go under Local/ or Azure_Cloud/
+            if options.save_artifacts and self.config.artifacts.enable:
+                self.artifact_manager.current_mode = options.processing_mode
+
+            # ── Azure batch optimisation: send entire PDF in one DI call ──
+            if (
+                options.processing_mode == "azure"
+                and file_type == "pdf"
+                and len(page_images) > 1
+            ):
+                return self._process_pdf_azure_batch(
+                    path, page_images, doc_id, options, start_time
+                )
             
             for page_num, page_image in enumerate(page_images, start=1):
                 logger.info(f"Processing page {page_num}/{len(page_images)}")
@@ -336,7 +378,7 @@ class DocumentProcessor:
             # Save output
             if options.save_json:
                 output_dir = options.output_dir or self.config.output.dir
-                self._save_output(document, output_dir)
+                self._save_output(document, output_dir, options.processing_mode)
             
             # Generate artifact summary
             if options.save_artifacts and self.config.artifacts.enable:
@@ -512,7 +554,139 @@ class DocumentProcessor:
             "tables": tables,
             "fields": fields
         }
-    
+
+    def _process_pdf_azure_batch(
+        self,
+        pdf_path: Path,
+        page_images: List[np.ndarray],
+        doc_id: str,
+        options: ProcessingOptions,
+        start_time: float,
+    ) -> ProcessingResult:
+        """
+        Process a multi-page PDF in a single Azure DI call.
+
+        Instead of sending each rasterised page image individually, this sends
+        the raw PDF bytes to ``analyze_bytes()`` — one API call for all pages.
+        GPT Vision KIE is still done per-page (GPT requires images).
+        """
+        logger.info(
+            f"Azure batch mode: sending entire PDF ({len(page_images)} pages) "
+            "in a single Document Intelligence call"
+        )
+
+        pdf_bytes = pdf_path.read_bytes()
+        batch_result = self.azure_di_provider.analyze_bytes(pdf_bytes)
+
+        # analyze_bytes returns {"pages": [...]} for multi-page, or a single dict
+        if "pages" in batch_result:
+            per_page_results = batch_result["pages"]
+        else:
+            per_page_results = [batch_result]
+
+        pages = []
+        all_tables = []
+        all_fields_lists = []
+
+        for page_num, (page_data, page_image) in enumerate(
+            zip(per_page_results, page_images), start=1
+        ):
+            logger.info(f"Processing page {page_num}/{len(page_images)} (batch)")
+
+            h, w = page_image.shape[:2]
+
+            # Reconstruct typed objects from cached/batch data
+            text_lines = page_data.get("text_lines", [])
+            tables = page_data.get("tables", [])
+            layout_regions = page_data.get("layout_regions", [])
+            raw_text = page_data.get("raw_text", "")
+
+            # Save artifacts
+            if options.save_artifacts:
+                self.artifact_manager.save_layout_overlay(
+                    page_image, layout_regions, doc_id, page_num
+                )
+                self.artifact_manager.save_text_polygons_overlay(
+                    page_image, text_lines, doc_id, page_num
+                )
+                self.artifact_manager.save_table_structure_overlay(
+                    page_image, tables, doc_id, page_num
+                )
+                self.artifact_manager.save_ocr_overlay(
+                    page_image, text_lines, doc_id, page_num
+                )
+
+            # GPT Vision KIE (still per-page — GPT needs images)
+            fields = []
+            if options.use_gpt_vision_kie and self.config.azure.is_openai_ready:
+                fields = self.gpt_vision_extractor.extract(
+                    page_image,
+                    page_num=page_num,
+                    ocr_text=raw_text,
+                    document_type=options.document_type,
+                )
+
+            page = Page(
+                number=page_num,
+                metadata=PageMetadata(
+                    width=w,
+                    height=h,
+                    dpi=self.config.pdf.dpi,
+                    content_type=ContentType.UNKNOWN,
+                    readability="good",
+                    readability_issues=[],
+                ),
+                layout_regions=layout_regions,
+                text_lines=text_lines,
+                tables=tables,
+                raw_text=raw_text,
+            )
+
+            pages.append(page)
+            all_tables.extend(tables)
+            all_fields_lists.append(fields)
+
+        # Fuse fields from all sources
+        fused_fields = self.fuser.fuse_fields(all_fields_lists)
+
+        # Run validators
+        if options.run_validators:
+            fused_fields = self._run_validators(fused_fields)
+
+        processing_time = time.time() - start_time
+
+        document = Document(
+            id=doc_id,
+            metadata=DocumentMetadata(
+                filename=pdf_path.name,
+                file_type="pdf",
+                file_size_bytes=pdf_path.stat().st_size,
+                processed_at=datetime.utcnow(),
+                processing_time_seconds=processing_time,
+            ),
+            page_count=len(pages),
+            pages=pages,
+            tables=all_tables,
+            fields=fused_fields,
+            validation=self._summarize_validation(fused_fields),
+        )
+
+        # Save output
+        if options.save_json:
+            output_dir = options.output_dir or self.config.output.dir
+            self._save_output(document, output_dir, options.processing_mode)
+
+        # Generate artifact summary
+        if options.save_artifacts and self.config.artifacts.enable:
+            self.artifact_manager.generate_summary_html(document, doc_id)
+
+        logger.info(
+            f"Batch document processed successfully in {processing_time:.2f}s "
+            f"({len(pages)} pages)"
+        )
+
+        return ProcessingResult(success=True, document=document)
+
     def _process_page_azure(
         self,
         image: np.ndarray,
@@ -531,6 +705,21 @@ class DocumentProcessor:
         tables = azure_result["tables"]
         layout_regions = azure_result["layout_regions"]
         raw_text = azure_result["raw_text"]
+
+        # ── Save artifacts (same overlays as local pipeline) ────────
+        if options.save_artifacts:
+            self.artifact_manager.save_layout_overlay(
+                image, layout_regions, doc_id, page_num
+            )
+            self.artifact_manager.save_text_polygons_overlay(
+                image, text_lines, doc_id, page_num
+            )
+            self.artifact_manager.save_table_structure_overlay(
+                image, tables, doc_id, page_num
+            )
+            self.artifact_manager.save_ocr_overlay(
+                image, text_lines, doc_id, page_num
+            )
 
         # ── GPT Vision KIE (field extraction) ───────────────────────
         fields = []
@@ -677,9 +866,12 @@ class DocumentProcessor:
             details=all_results
         )
     
-    def _save_output(self, document: Document, output_dir: str) -> str:
+    def _save_output(self, document: Document, output_dir: str, processing_mode: str = "local") -> str:
         """Save document to JSON file."""
         output_path = Path(output_dir)
+        # Route into Local/ or Azure_Cloud/ subfolder
+        subfolder = "Azure_Cloud" if processing_mode == "azure" else "Local"
+        output_path = output_path / subfolder
         output_path.mkdir(parents=True, exist_ok=True)
         
         filename = f"{document.metadata.filename}_{document.id}.json"
@@ -744,3 +936,26 @@ class DocumentProcessor:
                 results.append(result)
         
         return results
+
+    # ── Cost / cache stats ───────────────────────────────────────────────
+
+    def get_cost_stats(self) -> Dict[str, Any]:
+        """Return combined cost tracker + cache statistics."""
+        stats: Dict[str, Any] = {}
+
+        if self._cost_tracker is not None:
+            stats["costs"] = self.cost_tracker.to_dict()
+        else:
+            stats["costs"] = {"total_calls": 0, "estimated_cost_usd": 0}
+
+        if self._response_cache is not None:
+            stats["cache"] = self.response_cache.stats()
+        else:
+            stats["cache"] = {"enabled": False}
+
+        return stats
+
+    def print_cost_summary(self) -> None:
+        """Print a human-readable cost summary to the log."""
+        if self._cost_tracker is not None:
+            logger.info("\n" + self.cost_tracker.summary())

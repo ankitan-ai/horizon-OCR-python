@@ -370,7 +370,11 @@ class TestLazyAzureProperties:
             MockDI.return_value = MagicMock()
             provider = processor.azure_di_provider
             assert provider is not None
-            MockDI.assert_called_once_with(test_config.azure)
+            MockDI.assert_called_once_with(
+                test_config.azure,
+                cost_tracker=processor.cost_tracker,
+                response_cache=processor.response_cache,
+            )
 
     def test_gpt_vision_lazy_creates_instance(self, test_config):
         test_config.azure = _azure_config()
@@ -379,7 +383,11 @@ class TestLazyAzureProperties:
             MockGPT.return_value = MagicMock()
             extractor = processor.gpt_vision_extractor
             assert extractor is not None
-            MockGPT.assert_called_once_with(test_config.azure)
+            MockGPT.assert_called_once_with(
+                test_config.azure,
+                cost_tracker=processor.cost_tracker,
+                response_cache=processor.response_cache,
+            )
 
 
 # ──────────────────────────────────────────────────────────────

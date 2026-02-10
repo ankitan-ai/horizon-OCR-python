@@ -53,6 +53,7 @@ htmlcov/
 data/
 output/
 artifacts/
+.cache/
 *.pdf
 *.jpg
 *.jpeg

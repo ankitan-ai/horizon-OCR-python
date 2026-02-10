@@ -12,6 +12,7 @@ import uuid
 import json
 import time
 import base64
+import hashlib
 import tempfile
 import asyncio
 import shutil
@@ -123,9 +124,19 @@ async def process_document(
         raise HTTPException(400, f"Unsupported file type: {suffix}")
 
     job_id = str(uuid.uuid4())[:12]
-    upload_path = UPLOAD_DIR / f"{job_id}{suffix}"
     content = await file.read()
-    upload_path.write_bytes(content)
+
+    # --- Deduplicate temp uploads using content hash ---
+    content_hash = hashlib.sha256(content).hexdigest()[:16]
+    upload_path = UPLOAD_DIR / f"{content_hash}{suffix}"
+    if not upload_path.exists():
+        upload_path.write_bytes(content)
+        logger.info(f"Stored new upload: {upload_path.name}")
+    else:
+        logger.info(f"Upload deduplicated — reusing {upload_path.name}")
+
+    # Determine mode subfolder for artifacts
+    mode_subfolder = "Azure_Cloud" if processing_mode == "azure" else "Local"
 
     _jobs[job_id] = {
         "status": "processing",
@@ -166,8 +177,11 @@ async def process_document(
                 _jobs[job_id]["status"] = "completed"
                 _jobs[job_id]["result"] = doc_dict
                 _jobs[job_id]["artifacts_dir"] = str(
-                    ARTIFACTS_BASE / result.document.id
+                    ARTIFACTS_BASE / mode_subfolder / result.document.id
                 )
+                # Log cost summary after Azure processing
+                if processing_mode == "azure":
+                    _processor.print_cost_summary()
             else:
                 _jobs[job_id]["status"] = "failed"
                 _jobs[job_id]["error"] = result.error
@@ -175,11 +189,6 @@ async def process_document(
             logger.exception("Processing failed")
             _jobs[job_id]["status"] = "failed"
             _jobs[job_id]["error"] = str(exc)
-        finally:
-            try:
-                upload_path.unlink(missing_ok=True)
-            except Exception:
-                pass
 
     asyncio.ensure_future(_run())
     return {"job_id": job_id}
@@ -233,6 +242,38 @@ async def download_json(job_id: str):
         content=job["result"],
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+# ---------------------------------------------------------------------------
+# API: Azure cost tracking & cache stats
+# ---------------------------------------------------------------------------
+@app.get("/api/costs")
+async def get_costs():
+    """Return Azure API cost tracking and response cache statistics."""
+    if _processor is None:
+        raise HTTPException(503, "Service not initialised")
+    return _processor.get_cost_stats()
+
+
+@app.post("/api/costs/reset")
+async def reset_costs():
+    """Reset cost tracking counters."""
+    if _processor is None:
+        raise HTTPException(503, "Service not initialised")
+    if _processor._cost_tracker is not None:
+        _processor.cost_tracker.reset()
+    return {"ok": True}
+
+
+@app.post("/api/cache/clear")
+async def clear_cache():
+    """Clear the Azure response cache."""
+    if _processor is None:
+        raise HTTPException(503, "Service not initialised")
+    count = 0
+    if _processor._response_cache is not None:
+        count = _processor.response_cache.clear()
+    return {"ok": True, "entries_cleared": count}
 
 
 # ---------------------------------------------------------------------------

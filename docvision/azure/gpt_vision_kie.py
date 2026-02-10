@@ -90,7 +90,12 @@ class GPTVisionExtractor:
         # fields is List[Field] ready for RankAndFuse
     """
 
-    def __init__(self, azure_config: AzureConfig) -> None:
+    def __init__(
+        self,
+        azure_config: AzureConfig,
+        cost_tracker=None,
+        response_cache=None,
+    ) -> None:
         if not azure_config.is_openai_ready:
             raise ValueError(
                 "Azure OpenAI is not configured. "
@@ -100,6 +105,8 @@ class GPTVisionExtractor:
 
         self._config = azure_config
         self._client = None  # lazy
+        self.cost_tracker = cost_tracker
+        self.cache = response_cache
         logger.info(
             "GPTVisionExtractor initialised  "
             f"(deployment={azure_config.openai_deployment}, "
@@ -113,11 +120,14 @@ class GPTVisionExtractor:
         """Lazy-initialise the Azure OpenAI SDK client."""
         if self._client is None:
             from openai import AzureOpenAI
+            import httpx
+            import certifi
 
             self._client = AzureOpenAI(
                 azure_endpoint=self._config.openai_endpoint,
                 api_key=self._config.openai_key,
                 api_version=self._config.openai_api_version,
+                http_client=httpx.Client(verify=certifi.where()),
             )
             logger.debug("AzureOpenAI client created")
         return self._client
@@ -145,6 +155,30 @@ class GPTVisionExtractor:
             ``List[Field]`` ready for the rank-and-fuse pipeline.
         """
         doc_type = document_type or self._config.document_type or "auto"
+
+        # ── Check cache ─────────────────────────────────────────────
+        cache_key = None
+        if self.cache is not None:
+            image_bytes = self._encode_image_b64(image).encode()
+            cache_key = self.cache.make_key(
+                image_bytes,
+                service="gpt",
+                model=self._config.openai_deployment,
+                extra=doc_type,
+            )
+            cached = self.cache.get(cache_key)
+            if cached is not None:
+                logger.info(
+                    f"Cache hit for GPT Vision page {page_num} — skipping API call"
+                )
+                fields = self._dict_to_fields(cached, page_num)
+                if self.cost_tracker:
+                    self.cost_tracker.record_gpt_call(
+                        deployment=self._config.openai_deployment,
+                        latency=0.0, cached=True,
+                    )
+                return fields
+
         messages = self._build_messages(image, ocr_text, doc_type)
 
         t0 = time.perf_counter()
@@ -164,16 +198,35 @@ class GPTVisionExtractor:
         raw_text = (response.choices[0].message.content or "").strip()
         usage = response.usage
 
+        prompt_tokens = usage.prompt_tokens if usage else 0
+        completion_tokens = usage.completion_tokens if usage else 0
+
         logger.info(
             f"GPT Vision response in {elapsed:.2f}s  "
-            f"(tokens: prompt={usage.prompt_tokens}, "
-            f"completion={usage.completion_tokens})"
-            if usage
-            else f"GPT Vision response in {elapsed:.2f}s"
+            f"(tokens: prompt={prompt_tokens}, "
+            f"completion={completion_tokens})"
         )
+
+        # ── Record cost ─────────────────────────────────────────────
+        if self.cost_tracker:
+            self.cost_tracker.record_gpt_call(
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                deployment=self._config.openai_deployment,
+                latency=elapsed,
+            )
 
         # Parse the JSON and convert to Field objects
         extracted = self._parse_response(raw_text)
+
+        # ── Store in cache ──────────────────────────────────────────
+        if self.cache is not None and cache_key and extracted:
+            self.cache.put(cache_key, extracted, metadata={
+                "page_num": page_num, "doc_type": doc_type,
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+            })
+
         fields = self._dict_to_fields(extracted, page_num)
 
         logger.info(f"GPT Vision extracted {len(fields)} fields from page {page_num}")

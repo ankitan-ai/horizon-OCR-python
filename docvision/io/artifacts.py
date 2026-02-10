@@ -108,13 +108,26 @@ class ArtifactManager:
         self.save_table_structure = save_table_structure
         self._save_ocr_overlay = save_ocr_overlay
         self.save_preprocessed = save_preprocessed
+        self.current_mode: Optional[str] = None  # "local" or "azure"
         
         if enable:
             self.output_dir.mkdir(parents=True, exist_ok=True)
     
-    def get_document_dir(self, doc_id: str) -> Path:
-        """Get artifact directory for a specific document."""
-        doc_dir = self.output_dir / doc_id
+    def get_document_dir(self, doc_id: str, mode: Optional[str] = None) -> Path:
+        """Get artifact directory for a specific document.
+
+        Args:
+            doc_id: Document identifier.
+            mode: Processing mode (``"local"`` or ``"azure"``).  Falls back
+                  to ``self.current_mode`` when *None*.  When set, artifacts
+                  are stored under a ``Local/`` or ``Azure_Cloud/`` subfolder.
+        """
+        effective_mode = mode or self.current_mode
+        base = self.output_dir
+        if effective_mode:
+            subfolder = "Azure_Cloud" if effective_mode == "azure" else "Local"
+            base = base / subfolder
+        doc_dir = base / doc_id
         if self.enable:
             doc_dir.mkdir(parents=True, exist_ok=True)
         return doc_dir
