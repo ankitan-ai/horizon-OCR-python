@@ -92,7 +92,7 @@ class TestRoutingTables:
         assert _GPT_ROUTING["simple"]["invoice"] == "gpt-4o-mini"
 
     def test_gpt_routing_complex_bol(self):
-        assert _GPT_ROUTING["complex"]["bol"] == "gpt-4.1"
+        assert _GPT_ROUTING["complex"]["bol"] == "gpt-5-mini"
 
     def test_gpt_routing_medium_bol(self):
         assert _GPT_ROUTING["medium"]["bol"] == "gpt-4.1-mini"
@@ -187,7 +187,7 @@ class TestRouteGPT:
         assert classifier._route_gpt("invoice", "simple") == "gpt-4o-mini"
 
     def test_complex_bol(self, classifier):
-        assert classifier._route_gpt("bol", "complex") == "gpt-4.1"
+        assert classifier._route_gpt("bol", "complex") == "gpt-5-mini"
 
     def test_unknown_complexity_falls_back_to_medium(self, classifier):
         result = classifier._route_gpt("invoice", "ultra")
@@ -227,7 +227,7 @@ class TestClassifyFlow:
 
         assert result.document_type == "bol"
         assert result.complexity == "complex"
-        assert result.recommended_gpt_deployment == "gpt-4.1"
+        assert result.recommended_gpt_deployment == "gpt-5-mini"
         assert result.recommended_di_model == "prebuilt-layout"
 
     def test_classify_api_failure_returns_defaults(self, classifier, dummy_image):
@@ -308,12 +308,12 @@ class TestSmartRoutingConfig:
             "smart_routing": {
                 "enable": False,
                 "classifier_deployment": "gpt-4o-mini",
-                "default_gpt_deployment": "gpt-4.1",
+                "default_gpt_deployment": "gpt-5-mini",
             }
         })
         assert config.smart_routing.enable is False
         assert config.smart_routing.classifier_deployment == "gpt-4o-mini"
-        assert config.smart_routing.default_gpt_deployment == "gpt-4.1"
+        assert config.smart_routing.default_gpt_deployment == "gpt-5-mini"
 
 
 # ── Config value changes tests ───────────────────────────────────────────────
@@ -323,7 +323,7 @@ class TestConfigValueChanges:
 
     def test_dpi_is_500(self):
         from docvision.config import PDFConfig
-        assert PDFConfig().dpi == 500
+        assert PDFConfig().dpi == 600
 
     def test_reroute_threshold_lowered(self):
         from docvision.config import ThresholdsConfig

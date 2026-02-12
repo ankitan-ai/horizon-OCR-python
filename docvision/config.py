@@ -99,7 +99,7 @@ class RuntimeConfig:
 @dataclass
 class PDFConfig:
     """PDF processing configuration."""
-    dpi: int = 500  # Rasterization DPI (high for maximum accuracy)
+    dpi: int = 600  # Rasterization DPI (high for maximum accuracy)
     max_pages: Optional[int] = None  # None means process all pages
 
 
@@ -214,6 +214,28 @@ class SmartRoutingConfig:
 
 
 @dataclass
+class ReOCRConfig:
+    """Targeted re-OCR configuration for low-confidence regions."""
+    enable: bool = True                     # Enable targeted re-OCR
+    confidence_threshold: float = 0.70      # Re-process lines below this confidence
+    improvement_threshold: float = 0.05     # Minimum improvement to accept new result
+    strategy: str = "ensemble"              # ensemble, trocr_only, tesseract, sequential
+    max_lines_per_page: int = 50            # Max lines to re-process per page
+    
+    # Enhanced preprocessing settings
+    scale_factor: float = 2.0               # Upscale crop before OCR
+    enhanced_denoise: int = 15              # Stronger denoising (default: 10)
+    enhanced_clahe: float = 3.0             # Stronger CLAHE (default: 2.0)
+    enhanced_sharpen: float = 2.0           # Stronger sharpening (default: 1.5)
+    apply_binarization: bool = True         # Apply adaptive binarization
+    apply_morphology: bool = True           # Apply morphological cleanup
+    
+    # Azure re-OCR (optional, adds API cost)
+    azure_retry_enabled: bool = False       # Re-send very low confidence regions to Azure
+    azure_retry_threshold: float = 0.50     # Threshold for Azure retry (lower = more selective)
+
+
+@dataclass
 class Config:
     """Main configuration container."""
     runtime: RuntimeConfig = field(default_factory=RuntimeConfig)
@@ -228,6 +250,7 @@ class Config:
     markdown: MarkdownConfig = field(default_factory=MarkdownConfig)
     azure: AzureConfig = field(default_factory=AzureConfig)
     smart_routing: SmartRoutingConfig = field(default_factory=SmartRoutingConfig)
+    reocr: ReOCRConfig = field(default_factory=ReOCRConfig)
     
     @classmethod
     def from_dict(cls, data: dict) -> "Config":
@@ -258,6 +281,8 @@ class Config:
             config.azure = AzureConfig(**data["azure"])
         if "smart_routing" in data:
             config.smart_routing = SmartRoutingConfig(**data["smart_routing"])
+        if "reocr" in data:
+            config.reocr = ReOCRConfig(**data["reocr"])
         
         return config
 

@@ -260,13 +260,33 @@ class GPTVisionExtractor:
                 temperature=self._config.gpt_temperature,
             )
         except Exception as _tok_err:
-            if "max_completion_tokens" in str(_tok_err):
+            err_str = str(_tok_err)
+            if "max_completion_tokens" in err_str:
                 # Older model — fall back to legacy parameter
+                try:
+                    response = self.client.chat.completions.create(
+                        model=deployment,
+                        messages=messages,
+                        max_tokens=self._config.gpt_max_tokens,
+                        temperature=self._config.gpt_temperature,
+                    )
+                except Exception as _temp_err:
+                    if "temperature" in str(_temp_err).lower():
+                        # Model doesn't support temperature=0
+                        response = self.client.chat.completions.create(
+                            model=deployment,
+                            messages=messages,
+                            max_tokens=self._config.gpt_max_tokens,
+                        )
+                    else:
+                        raise
+            elif "temperature" in err_str.lower():
+                # Model doesn't support temperature=0.0 — retry without it
+                logger.warning(f"Model doesn't support temperature={self._config.gpt_temperature}, retrying without temperature")
                 response = self.client.chat.completions.create(
                     model=deployment,
                     messages=messages,
-                    max_tokens=self._config.gpt_max_tokens,
-                    temperature=self._config.gpt_temperature,
+                    max_completion_tokens=self._config.gpt_max_tokens,
                 )
             else:
                 raise

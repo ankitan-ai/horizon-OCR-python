@@ -47,6 +47,7 @@ WEB_DIR = Path(__file__).parent
 STATIC_DIR = WEB_DIR / "static"
 UPLOAD_DIR = Path(tempfile.gettempdir()) / "docvision_uploads"
 ARTIFACTS_BASE = Path("artifacts")
+OUTPUT_BASE = Path("output")
 
 
 # ---------------------------------------------------------------------------
@@ -63,6 +64,7 @@ async def lifespan(app: FastAPI):
     _processor = DocumentProcessor(config)
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     ARTIFACTS_BASE.mkdir(parents=True, exist_ok=True)
+    OUTPUT_BASE.mkdir(parents=True, exist_ok=True)
     logger.info("DocVision Web UI ready")
     yield
     logger.info("Shutting down DocVision Web UI")
@@ -100,6 +102,55 @@ async def index():
     """Serve the single-page UI."""
     html_path = WEB_DIR / "index.html"
     return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
+
+
+# ---------------------------------------------------------------------------
+# Auto-save helper
+# ---------------------------------------------------------------------------
+def _auto_save_result(doc_dict: dict, original_filename: str, processing_mode: str) -> Optional[str]:
+    """
+    Automatically save the processing result to the output folder.
+    
+    Args:
+        doc_dict: The document dictionary to save
+        original_filename: The original filename from upload (not the hash-based temp name)
+        processing_mode: 'local', 'azure', or 'hybrid'
+        
+    Returns:
+        Path to the saved file, or None if save failed
+    """
+    try:
+        subfolder = "Azure_Cloud" if processing_mode == "azure" else "Local"
+        out_dir = OUTPUT_BASE / subfolder
+        out_dir.mkdir(parents=True, exist_ok=True)
+        
+        stem = Path(original_filename).stem
+        filename = f"{stem}.json"
+        filepath = out_dir / filename
+        
+        # Add reconstruction data
+        from docvision.io.reconstruction import add_reconstruction_to_document
+        data = add_reconstruction_to_document(doc_dict)
+        
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False, default=str)
+        
+        logger.info(f"Auto-saved result to: {filepath}")
+        
+        # Also generate Markdown report
+        from docvision.io.markdown import save_markdown
+        md_path = save_markdown(
+            data=data,
+            output_dir="markdown",
+            processing_mode=processing_mode,
+            filename_stem=stem,
+        )
+        logger.info(f"Auto-saved Markdown report: {md_path}")
+        
+        return str(filepath)
+    except Exception as exc:
+        logger.error(f"Auto-save failed: {exc}")
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -192,13 +243,18 @@ async def process_document(
 
             if result.success:
                 doc_dict = result.document.model_dump(mode="json")
+                artifacts_dir_path = ARTIFACTS_BASE / mode_subfolder / Path(result.document.metadata.filename).stem
                 _update_job(
                     job_id,
                     status="completed",
                     result=doc_dict,
-                    artifacts_dir=str(
-                        ARTIFACTS_BASE / mode_subfolder / Path(result.document.metadata.filename).stem
-                    ),
+                    artifacts_dir=str(artifacts_dir_path),
+                )
+                # Auto-save JSON to output folder
+                _auto_save_result(
+                    doc_dict=doc_dict,
+                    original_filename=file.filename,
+                    processing_mode=processing_mode,
                 )
                 # Log cost summary after Azure processing
                 if processing_mode == "azure":
@@ -293,13 +349,18 @@ async def process_batch(
 
                 if result.success:
                     doc_dict = result.document.model_dump(mode="json")
+                    artifacts_dir_path = ARTIFACTS_BASE / msub / Path(result.document.metadata.filename).stem
                     _update_job_batch(
                         jid,
                         status="completed",
                         result=doc_dict,
-                        artifacts_dir=str(
-                            ARTIFACTS_BASE / msub / Path(result.document.metadata.filename).stem
-                        ),
+                        artifacts_dir=str(artifacts_dir_path),
+                    )
+                    # Auto-save JSON to output folder
+                    _auto_save_result(
+                        doc_dict=doc_dict,
+                        original_filename=_jobs[jid]["filename"],
+                        processing_mode=mode,
                     )
                 else:
                     _update_job_batch(jid, status="failed", error=result.error)
@@ -453,9 +514,8 @@ async def download_json(job_id: str):
 
 
 # ---------------------------------------------------------------------------
-# API: save result to disk
+# API: save result to disk (manual save, used by Save button)
 # ---------------------------------------------------------------------------
-OUTPUT_BASE = Path("output")
 
 
 @app.post("/api/jobs/{job_id}/save")
@@ -589,7 +649,7 @@ if __name__ == "__main__":
     import uvicorn
 
     port = int(os.environ.get("PORT", 8080))
-    print(f"\n  DocVision Web UI → http://localhost:{port}\n")
+    print(f"\n  DocVision Web UI -> http://localhost:{port}\n")
     uvicorn.run(
         "docvision.web.app:app",
         host="127.0.0.1",

@@ -108,6 +108,24 @@ class SourceEngine(str, Enum):
     GPT_VISION = "gpt_vision"
 
 
+class StyleSource(str, Enum):
+    """Source of style information."""
+    PDF_NATIVE = "pdf_native"
+    AZURE_DETECTED = "azure_detected"
+    ESTIMATED = "estimated"
+
+
+class TextStyle(BaseModel):
+    """Style information for text."""
+    font_name: Optional[str] = None
+    font_size: Optional[float] = None
+    bold: bool = False
+    italic: bool = False
+    color: Optional[str] = None  # Hex color
+    source: StyleSource = StyleSource.ESTIMATED
+    confidence: float = PydanticField(ge=0.0, le=1.0, default=0.5)
+
+
 class Word(BaseModel):
     """Individual word with position and confidence."""
     text: str
@@ -127,6 +145,7 @@ class TextLine(BaseModel):
     confidence: float = PydanticField(ge=0.0, le=1.0)
     source: SourceEngine = SourceEngine.TROCR
     content_type: ContentType = ContentType.UNKNOWN
+    style: Optional[TextStyle] = None
 
 
 class LayoutRegion(BaseModel):

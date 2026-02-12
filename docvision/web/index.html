@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -22,14 +22,15 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 a{color:var(--primary);text-decoration:none}
 
 /* ── Layout ─────────────────────────────────────────────────────── */
-.app{max-width:1320px;margin:0 auto;padding:20px 28px 60px}
+.app{max-width:1800px;margin:0 auto;padding:20px 28px 60px}
+@media(min-width:1400px){.app{max-width:95vw}}
 header{display:flex;align-items:center;gap:14px;padding:18px 0 28px;border-bottom:1px solid var(--border)}
 header h1{font-size:1.55rem;font-weight:700;letter-spacing:-.3px}
 header h1 span{color:var(--primary)}
 header .version{font-size:.78rem;color:var(--muted);margin-left:auto}
 
 /* ── Tabs ───────────────────────────────────────────────────────── */
-.tabs{display:flex;gap:6px;margin:24px 0 20px;border-bottom:2px solid var(--border);padding-bottom:0;overflow-x:auto}
+.tabs{display:flex;gap:6px;margin:24px 0 20px;border-bottom:2px solid var(--border);padding-bottom:0;overflow:hidden}
 .tab{padding:10px 22px;cursor:pointer;font-size:.9rem;font-weight:500;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;transition:.2s;user-select:none;border-radius:var(--radius) var(--radius) 0 0;white-space:nowrap}
 .tab:hover{color:var(--text);background:var(--surface)}
 .tab.active{color:var(--primary);border-bottom-color:var(--primary);background:var(--surface)}
@@ -100,7 +101,8 @@ header .version{font-size:.78rem;color:var(--muted);margin-left:auto}
 .status-time{font-size:.8rem;color:var(--muted);font-family:var(--mono)}
 
 /* ── Artifact Grid ─────────────────────────────────────────────── */
-.artifacts-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:18px;margin-top:16px}
+.artifacts-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(400px,1fr));gap:18px;margin-top:16px}
+@media(min-width:1400px){.artifacts-grid{grid-template-columns:repeat(auto-fill,minmax(450px,1fr))}}
 .artifact-card{background:var(--surface);border-radius:var(--radius);overflow:hidden;border:1px solid var(--border);transition:.2s}
 .artifact-card:hover{border-color:var(--primary);box-shadow:var(--shadow)}
 .artifact-card img{width:100%;display:block;cursor:pointer;background:#000}
@@ -272,6 +274,74 @@ header .version{font-size:.78rem;color:var(--muted);margin-left:auto}
 .validation-box .vb-stats{font-size:.84rem;color:var(--muted);margin-bottom:8px}
 .issue-item{padding:4px 0;font-size:.84rem;color:var(--warning)}
 
+/* ── Job Selector ──────────────────────────────────────────────── */
+.job-selector{display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--surface);border-radius:var(--radius);margin-bottom:16px;border:1px solid var(--border)}
+.job-selector label{font-weight:600;font-size:.88rem;color:var(--muted)}
+.job-selector select{flex:1;padding:8px 14px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:.88rem;cursor:pointer;max-width:400px}
+.job-selector select:focus{outline:none;border-color:var(--primary)}
+.job-selector .status-indicator{font-size:.78rem;padding:3px 10px;border-radius:12px;font-weight:600}
+.job-selector .status-indicator.completed{background:rgba(34,197,94,.15);color:var(--success)}
+.job-selector .status-indicator.failed{background:rgba(239,68,68,.15);color:var(--error)}
+.job-selector .status-indicator.processing{background:rgba(245,158,11,.15);color:var(--warning)}
+
+/* ── Spatial OCR View ───────────────────────────────────────────── */
+.spatial-viewer{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);overflow:hidden}
+.spatial-loading{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px;gap:16px;color:var(--muted)}
+.spatial-page-nav{display:flex;align-items:center;justify-content:center;gap:16px;padding:12px;background:var(--surface2);border-bottom:1px solid var(--border)}
+.spatial-page-nav button{padding:6px 14px;border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:var(--radius);cursor:pointer;font-size:.85rem}
+.spatial-page-nav button:hover:not(:disabled){background:var(--primary);color:#fff;border-color:var(--primary)}
+.spatial-page-nav button:disabled{opacity:.4;cursor:not-allowed}
+.spatial-page-nav .page-info{font-size:.9rem;color:var(--muted);font-weight:500}
+.spatial-container{display:grid;grid-template-columns:1fr 1fr;gap:0;max-height:80vh;overflow:auto}
+@media(min-width:1400px){.spatial-container{max-height:85vh}}
+.spatial-side{position:relative;min-height:500px}
+.spatial-side.image-side{background:#1a1a1a;display:flex;align-items:flex-start;justify-content:center;padding:20px;border-right:1px solid var(--border);overflow:auto}
+.spatial-side.image-side img{max-width:100%;height:auto;box-shadow:0 4px 20px rgba(0,0,0,.3)}
+.spatial-side.text-side{background:#f8f8f8;padding:10px;overflow:auto}
+.spatial-reconstructed{position:relative;background:#fff;margin:0 auto;box-shadow:0 2px 12px rgba(0,0,0,.15)}
+/* Spatial text elements - confidence color coding */
+.spatial-text{position:absolute;font-size:12px;line-height:1.2;font-family:'Segoe UI',system-ui,sans-serif;padding:2px 5px;border-radius:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;max-width:250px;z-index:1;transition:all 0.15s ease;border-left:3px solid}
+/* High confidence (>=70%): Green */
+.spatial-text.high-conf{background:rgba(220,252,231,0.95);border-color:#22c55e;color:#166534;border-left-color:#22c55e}
+/* Medium confidence (50-70%): Orange/Amber */
+.spatial-text.med-conf{background:rgba(254,243,199,0.95);border-color:#f59e0b;color:#92400e;border-left-color:#f59e0b}
+/* Low confidence (<50%): Red */
+.spatial-text.low-conf{background:rgba(254,226,226,0.95);border-color:#ef4444;color:#dc2626;border-left-color:#dc2626;font-weight:500}
+.spatial-text:hover{overflow:visible;white-space:normal;word-wrap:break-word;max-width:350px;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,0.25);font-size:13px}
+.spatial-text.high-conf:hover{background:#dcfce7;border-color:#16a34a}
+.spatial-text.med-conf:hover{background:#fef3c7;border-color:#d97706}
+.spatial-text.low-conf:hover{background:#fee2e2;border-color:#dc2626}
+/* Spatial table elements */
+.spatial-table{position:absolute;border:2px solid #333;background:rgba(255,255,255,0.95);z-index:5}
+.spatial-table-cell{position:absolute;font-size:11px;line-height:1.2;padding:2px 4px;font-family:'Segoe UI',system-ui,sans-serif;border:1px solid #aaa;background:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;box-sizing:border-box;z-index:6;cursor:pointer;transition:all 0.15s ease;border-left:3px solid}
+.spatial-table-cell:hover{overflow:visible;white-space:normal;word-wrap:break-word;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,0.2);font-size:12px}
+.spatial-table-cell.header{font-weight:600;background:#e0e0e0}
+.spatial-table-cell.high-conf{background:rgba(220,252,231,0.95);border-left-color:#22c55e;color:#166534}
+.spatial-table-cell.med-conf{background:rgba(254,243,199,0.95);border-left-color:#f59e0b;color:#92400e}
+.spatial-table-cell.low-conf{background:rgba(254,226,226,0.95);border-left-color:#dc2626;color:#dc2626;font-weight:500}
+.spatial-no-data{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px;gap:12px;color:var(--muted);text-align:center}
+.spatial-no-data .icon{font-size:2.5rem;opacity:.6}
+.spatial-footer{padding:8px 16px;background:var(--surface2);border-top:1px solid var(--border);font-size:.75rem;color:var(--muted);text-align:center}
+/* Document Grid Layout (Spatial Right Panel) */
+.doc-grid{font-family:'Segoe UI',system-ui,sans-serif;font-size:13px;line-height:1.5;color:#1a1a1a;padding:8px}
+.doc-row{display:flex;flex-wrap:wrap;gap:8px;padding:4px 0;border-bottom:1px solid #eee}
+.doc-row.row-gap{margin-top:16px;padding-top:12px;border-top:2px solid #ddd}
+.doc-cell{padding:2px 6px;background:#fff;border-radius:3px}
+.doc-cell.left{flex:0 0 auto;max-width:35%}
+.doc-cell.center{flex:1 1 auto;text-align:center}
+.doc-cell.right{flex:0 0 auto;max-width:35%;margin-left:auto;text-align:right}
+.doc-cell.full{flex:1 1 100%}
+.doc-cell.low-conf{background:#fef3c7;color:#92400e}
+.doc-cell.very-low-conf{background:#fee2e2;color:#991b1b}
+.doc-table-section{margin:16px 0;padding:12px;background:#fff;border:1px solid #ddd;border-radius:6px}
+.doc-table-section.row-gap{margin-top:24px}
+.doc-table-section .table-header{font-size:11px;color:#666;margin-bottom:8px;font-weight:500}
+.doc-table-section table{width:100%;border-collapse:collapse;font-size:12px}
+.doc-table-section th,.doc-table-section td{border:1px solid #ccc;padding:6px 8px;text-align:left}
+.doc-table-section th{background:#f5f5f5;font-weight:600}
+.doc-table-section td{background:#fff}
+@media(max-width:900px){.spatial-container{grid-template-columns:1fr}.spatial-side.image-side{border-right:none;border-bottom:1px solid var(--border)}}
+
 /* ── Responsive ────────────────────────────────────────────────── */
 @media(max-width:640px){
   .app{padding:12px 14px 40px}
@@ -295,11 +365,11 @@ header .version{font-size:.78rem;color:var(--muted);margin-left:auto}
 
   <!-- Tabs -->
   <div class="tabs">
-    <div class="tab active" data-tab="upload">⬆ Upload &amp; Scan</div>
-    <div class="tab" data-tab="artifacts">🔍 Artifacts</div>
-    <div class="tab" data-tab="output">📝 Output</div>
-    <div class="tab" data-tab="history">📋 History</div>
-    <div class="tab" data-tab="costs">💰 Cost &amp; Usage</div>
+    <div class="tab active" data-tab="upload"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-3px;margin-right:6px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Upload</div>
+    <div class="tab" data-tab="artifacts"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-3px;margin-right:6px"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>Artifacts</div>
+    <div class="tab" data-tab="output"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-3px;margin-right:6px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Output</div>
+    <div class="tab" data-tab="history"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-3px;margin-right:6px"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>History</div>
+    <div class="tab" data-tab="costs"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-3px;margin-right:6px"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Costs</div>
   </div>
 
   <!-- ─── UPLOAD PANEL ──────────────────────────────────────────── -->
@@ -365,6 +435,10 @@ header .version{font-size:.78rem;color:var(--muted);margin-left:auto}
 
   <!-- ─── ARTIFACTS PANEL ───────────────────────────────────────── -->
   <div class="panel" id="panel-artifacts">
+    <div id="artifactsJobSelector" class="job-selector" style="display:none">
+      <label>Document:</label>
+      <select id="artifactsJobSelect" onchange="onArtifactsJobChange(this.value)"></select>
+    </div>
     <div id="artifactsContent">
       <div class="empty"><div class="icon">🔍</div><p>Upload and process a document first</p></div>
     </div>
@@ -372,6 +446,10 @@ header .version{font-size:.78rem;color:var(--muted);margin-left:auto}
 
   <!-- ─── OUTPUT PANEL (Field Editor + JSON toggle) ─────────────── -->
   <div class="panel" id="panel-output">
+    <div id="outputJobSelector" class="job-selector" style="display:none">
+      <label>Document:</label>
+      <select id="outputJobSelect" onchange="onOutputJobChange(this.value)"></select>
+    </div>
     <div id="outputContent">
       <div class="empty"><div class="icon">📝</div><p>Upload and process a document first</p></div>
     </div>
@@ -381,7 +459,7 @@ header .version{font-size:.78rem;color:var(--muted);margin-left:auto}
   <div class="panel" id="panel-history">
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
       <h2 style="font-size:1.15rem;font-weight:700">Processing History</h2>
-      <button class="btn btn-secondary btn-sm" onclick="loadHistory()">🔄 Refresh</button>
+      <button class="btn btn-secondary btn-sm" onclick="loadHistory()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/></svg>Refresh</button>
     </div>
     <div class="history-table-wrap">
       <table class="history-table">
@@ -411,7 +489,7 @@ header .version{font-size:.78rem;color:var(--muted);margin-left:auto}
     </div>
 
     <div class="cost-section">
-      <h3>📊 Cache Performance</h3>
+      <h3><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px"><path d="M21 21H4.6c-.6 0-1.1-.2-1.4-.6-.4-.4-.6-.9-.6-1.4V3"/><path d="m7 14 4-4 4 4 6-6"/></svg>Cache Performance</h3>
       <div class="breakdown-row">
         <div class="breakdown-box" style="flex:2">
           <h4>Hit Rate</h4>
@@ -427,7 +505,7 @@ header .version{font-size:.78rem;color:var(--muted);margin-left:auto}
     </div>
 
     <div class="cost-section">
-      <h3>💵 Cost Breakdown</h3>
+      <h3><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px"><circle cx="12" cy="12" r="10"/><path d="M12 6v12"/><path d="M15.5 9.4a3.5 3.5 0 1 0 0 5.2"/></svg>Cost Breakdown</h3>
       <div class="breakdown-row" id="costBreakdown">
         <div class="breakdown-box"><h4>Document Intelligence</h4>
           <div class="breakdown-item"><span class="lbl">Calls</span><span class="val" id="bdDICalls">0</span></div>
@@ -443,13 +521,13 @@ header .version{font-size:.78rem;color:var(--muted);margin-left:auto}
     </div>
 
     <div class="cost-actions">
-      <button class="btn btn-secondary btn-sm" onclick="loadCosts()">🔄 Refresh</button>
-      <button class="btn btn-secondary btn-sm" onclick="resetCosts()" style="color:var(--warning)">🗑 Reset Counters</button>
-      <button class="btn btn-secondary btn-sm" onclick="clearCache()" style="color:var(--error)">🧹 Clear Cache</button>
+      <button class="btn btn-secondary btn-sm" onclick="loadCosts()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/></svg>Refresh</button>
+      <button class="btn btn-secondary btn-sm" onclick="resetCosts()" style="color:var(--warning)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><path d="M3 6h18"/><path d="M8 6V4c0-.5.2-1 .6-1.4C9 2.2 9.5 2 10 2h4c.5 0 1 .2 1.4.6.4.4.6.9.6 1.4v2"/><path d="M19 6v14c0 .5-.2 1-.6 1.4-.4.4-.9.6-1.4.6H7c-.5 0-1-.2-1.4-.6-.4-.4-.6-.9-.6-1.4V6"/></svg>Reset Counters</button>
+      <button class="btn btn-secondary btn-sm" onclick="clearCache()" style="color:var(--error)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><path d="M4 4l16 16"/><path d="M9 5h9a2 2 0 0 1 2 2v9"/><path d="M3 12v7a2 2 0 0 0 2 2h12"/><path d="m7 9 2.9 2.9"/><path d="M15 5v4"/></svg>Clear Cache</button>
     </div>
 
     <div class="cost-section">
-      <h3>📋 Call History</h3>
+      <h3><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="10"/></svg>Call History</h3>
       <div class="cost-table-wrap">
         <table class="cost-table">
           <thead><tr><th>Time</th><th>Service</th><th>Model</th><th>Detail</th><th>Latency</th><th>Cost</th><th></th></tr></thead>
@@ -477,8 +555,11 @@ let currentJobId   = null;
 let currentResult  = null;
 let selectedFile   = null;
 let selectedFiles  = [];        // batch
+let batchJobIds    = [];        // all job IDs from batch processing
+let batchJobInfos  = {};        // map job_id -> {filename, status}
 let processStart   = 0;
-let outputView     = 'fields';  // 'fields' | 'json'
+let outputView     = 'fields';  // 'fields' | 'report' | 'markdown' | 'json'
+let markdownContent = null;     // cached markdown content
 let costRefreshTimer = null;
 
 // ─── DOM helpers ──────────────────────────────────────────────────
@@ -674,6 +755,10 @@ btnProcess.addEventListener('click', async () => {
 btnBatch.addEventListener('click', async () => {
   if (!selectedFiles.length) return;
   const form = new FormData();
+  
+  // Store filenames for batch job tracking
+  const filenames = selectedFiles.map(f => f.name);
+  
   selectedFiles.forEach(f => form.append('files', f));
   form.append('processing_mode', modeSelect.value);
   form.append('document_type', docTypeSelect.value);
@@ -685,6 +770,14 @@ btnBatch.addEventListener('click', async () => {
     const res = await fetch('/api/process/batch', { method: 'POST', body: form });
     if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
     const data = await res.json();
+    
+    // Store batch job IDs and initialize job info
+    batchJobIds = data.job_ids;
+    batchJobInfos = {};
+    data.job_ids.forEach((jid, i) => {
+      batchJobInfos[jid] = { filename: filenames[i] || `Document ${i+1}`, status: 'queued' };
+    });
+    
     statusText.textContent = `Processing ${data.count} documents…`;
     pollBatchStatus(data.job_ids);
   } catch (err) {
@@ -699,6 +792,11 @@ async function pollBatchStatus(jobIds) {
     try {
       const r = await fetch(`/api/jobs/${jid}`);
       const j = await r.json();
+      // Update job info
+      if (batchJobInfos[jid]) {
+        batchJobInfos[jid].status = j.status;
+        batchJobInfos[jid].filename = j.filename || batchJobInfos[jid].filename;
+      }
       if (j.status === 'completed') completed++;
       else if (j.status === 'failed') failed++;
       else { processing++; allDone = false; }
@@ -709,11 +807,21 @@ async function pollBatchStatus(jobIds) {
     statusText.textContent = `✅ Batch complete! ${completed} succeeded, ${failed} failed`;
     setTimeout(() => statusBar.classList.remove('show'), 4000);
     btnBatch.disabled = false;
-    for (let i = jobIds.length - 1; i >= 0; i--) {
+    
+    // Populate job selectors for batch results
+    populateBatchJobSelectors();
+    
+    // Load the first completed job
+    for (let i = 0; i < jobIds.length; i++) {
       try {
         const r = await fetch(`/api/jobs/${jobIds[i]}`);
         const j = await r.json();
-        if (j.status === 'completed') { currentJobId = jobIds[i]; await loadResult(); await loadArtifacts(); break; }
+        if (j.status === 'completed') { 
+          currentJobId = jobIds[i]; 
+          await loadResult(); 
+          await loadArtifacts(); 
+          break; 
+        }
       } catch {}
     }
     loadCosts(); loadHistory();
@@ -753,6 +861,10 @@ async function pollStatus() {
       statusText.textContent = '✅ Processing complete!';
       setTimeout(() => statusBar.classList.remove('show'), 3000);
       btnProcess.disabled = false;
+      // Clear batch state for single file processing
+      batchJobIds = [];
+      batchJobInfos = {};
+      hideJobSelectors();
       await loadResult();
       await loadArtifacts();
       loadCosts();
@@ -764,6 +876,61 @@ async function pollStatus() {
       setTimeout(pollStatus, 1500);
     }
   } catch { setTimeout(pollStatus, 2000); }
+}
+
+// ──────────────────────────────────────────────────────────────────
+//  BATCH JOB SELECTORS
+// ──────────────────────────────────────────────────────────────────
+function populateBatchJobSelectors() {
+  if (batchJobIds.length <= 1) {
+    hideJobSelectors();
+    return;
+  }
+  
+  const artifactsSelector = $('#artifactsJobSelector');
+  const outputSelector = $('#outputJobSelector');
+  const artifactsSelect = $('#artifactsJobSelect');
+  const outputSelect = $('#outputJobSelect');
+  
+  // Build options HTML
+  let optionsHtml = '';
+  batchJobIds.forEach((jid, index) => {
+    const info = batchJobInfos[jid] || {};
+    const filename = info.filename || `Document ${index + 1}`;
+    const status = info.status || 'unknown';
+    const statusIcon = status === 'completed' ? '✅' : status === 'failed' ? '❌' : '⏳';
+    optionsHtml += `<option value="${jid}" ${jid === currentJobId ? 'selected' : ''}>${statusIcon} ${filename}</option>`;
+  });
+  
+  artifactsSelect.innerHTML = optionsHtml;
+  outputSelect.innerHTML = optionsHtml;
+  
+  // Show selectors
+  artifactsSelector.style.display = 'flex';
+  outputSelector.style.display = 'flex';
+}
+
+function hideJobSelectors() {
+  $('#artifactsJobSelector').style.display = 'none';
+  $('#outputJobSelector').style.display = 'none';
+}
+
+async function onArtifactsJobChange(jobId) {
+  if (!jobId || jobId === currentJobId) return;
+  currentJobId = jobId;
+  // Update both selects to stay in sync
+  $('#outputJobSelect').value = jobId;
+  await loadResult();
+  await loadArtifacts();
+}
+
+async function onOutputJobChange(jobId) {
+  if (!jobId || jobId === currentJobId) return;
+  currentJobId = jobId;
+  // Update both selects to stay in sync
+  $('#artifactsJobSelect').value = jobId;
+  await loadResult();
+  await loadArtifacts();
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -896,23 +1063,29 @@ function renderOutput() {
 
   let html = `
     <div class="view-toggle">
-      <button class="vt-btn ${outputView === 'fields' ? 'active' : ''}" onclick="switchView('fields')">📋 Fields &amp; Tables</button>
-      <button class="vt-btn ${outputView === 'report' ? 'active' : ''}" onclick="switchView('report')">📑 Report Viewer</button>
-      <button class="vt-btn ${outputView === 'json' ? 'active' : ''}" onclick="switchView('json')">{ } JSON Editor</button>
+      <button class="vt-btn ${outputView === 'fields' ? 'active' : ''}" onclick="switchView('fields')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>Fields &amp; Tables</button>
+      <button class="vt-btn ${outputView === 'report' ? 'active' : ''}" onclick="switchView('report')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Report</button>
+      <button class="vt-btn ${outputView === 'spatial' ? 'active' : ''}" onclick="switchView('spatial')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>Spatial</button>
+      <button class="vt-btn ${outputView === 'json' ? 'active' : ''}" onclick="switchView('json')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>JSON</button>
     </div>
     <div class="editor-toolbar">
-      <button class="btn btn-success btn-sm" onclick="saveAllEdits()">💾 Save Edits</button>
-      <button class="btn btn-primary btn-sm" onclick="saveToDisk()">📂 Save to Disk</button>
-      <button class="btn btn-secondary btn-sm" onclick="downloadJson()">⬇ JSON</button>
-      <button class="btn btn-secondary btn-sm" onclick="downloadMarkdown()" style="background:#4a9eff">📝 Markdown</button>
+      <button class="btn btn-success btn-sm" onclick="saveAllEdits()"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>Save Edits</button>
+      <button class="btn btn-primary btn-sm" onclick="saveToDisk()"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Save to Disk</button>
+      <button class="btn btn-secondary btn-sm" onclick="downloadJson()"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>JSON</button>
+      <button class="btn btn-secondary btn-sm" onclick="downloadMarkdown()" style="background:#4a9eff"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Markdown</button>
     </div>`;
 
   if (outputView === 'fields') html += renderFieldEditor();
   else if (outputView === 'report') html += renderReportView();
+  else if (outputView === 'spatial') html += renderSpatialView();
   else html += renderJsonEditor();
   html += '<div class="json-status" id="jsonStatus"></div>';
   el.innerHTML = html;
 
+  if (outputView === 'spatial') {
+    // Initialize spatial view after DOM is ready
+    setTimeout(initSpatialView, 0);
+  }
   if (outputView === 'json') {
     const ed = $('#jsonEditor');
     if (ed) { ed.addEventListener('input', validateJson); validateJson(); }
@@ -1274,6 +1447,549 @@ function renderReportView() {
   return h;
 }
 
+// ── Spatial OCR View ───────────────────────────────────────────────
+let spatialCurrentPage = 1;
+let spatialArtifacts = [];
+
+function renderSpatialView() {
+  if (!currentJobId || !currentResult) {
+    return '<div class="empty"><div class="icon">🗺</div><p>No result yet</p></div>';
+  }
+  
+  const pageCount = currentResult.page_count || currentResult.pages?.length || 1;
+  
+  return `
+    <div class="spatial-viewer" id="spatialViewer">
+      <div class="spatial-page-nav">
+        <button onclick="spatialPrevPage()" id="spatialPrev">◀ Previous</button>
+        <span class="page-info">Page <span id="spatialPageNum">1</span> of ${pageCount}</span>
+        <button onclick="spatialNextPage()" id="spatialNext">Next ▶</button>
+      </div>
+      <div class="spatial-container" id="spatialContainer">
+        <div class="spatial-side image-side" id="spatialImageSide">
+          <div class="spatial-loading">
+            <div class="spinner"></div>
+            <p>Loading page image...</p>
+          </div>
+        </div>
+        <div class="spatial-side text-side" id="spatialTextSide">
+          <div class="spatial-loading">
+            <div class="spinner"></div>
+            <p>Loading OCR data...</p>
+          </div>
+        </div>
+      </div>
+      <div class="spatial-footer">Left: Original document image | Right: Reconstructed OCR text layout</div>
+    </div>`;
+}
+
+async function initSpatialView() {
+  spatialCurrentPage = 1;
+  spatialArtifacts = [];
+  
+  // Fetch artifacts list
+  try {
+    const res = await fetch(`/api/jobs/${currentJobId}/artifacts`);
+    if (res.ok) {
+      const data = await res.json();
+      spatialArtifacts = data.artifacts || [];
+    }
+  } catch (e) {
+    console.error('Failed to load artifacts:', e);
+  }
+  
+  renderSpatialPage();
+  updateSpatialNavButtons();
+}
+
+function spatialPrevPage() {
+  if (spatialCurrentPage > 1) {
+    spatialCurrentPage--;
+    renderSpatialPage();
+    updateSpatialNavButtons();
+  }
+}
+
+function spatialNextPage() {
+  const pageCount = currentResult.page_count || currentResult.pages?.length || 1;
+  if (spatialCurrentPage < pageCount) {
+    spatialCurrentPage++;
+    renderSpatialPage();
+    updateSpatialNavButtons();
+  }
+}
+
+function updateSpatialNavButtons() {
+  const pageCount = currentResult.page_count || currentResult.pages?.length || 1;
+  const prevBtn = $('#spatialPrev');
+  const nextBtn = $('#spatialNext');
+  const pageNum = $('#spatialPageNum');
+  
+  if (prevBtn) prevBtn.disabled = spatialCurrentPage <= 1;
+  if (nextBtn) nextBtn.disabled = spatialCurrentPage >= pageCount;
+  if (pageNum) pageNum.textContent = spatialCurrentPage;
+}
+
+function renderSpatialPage() {
+  const imageSide = $('#spatialImageSide');
+  const textSide = $('#spatialTextSide');
+  if (!imageSide || !textSide) return;
+  
+  // Get page data
+  const pages = currentResult.pages || [];
+  const pageIdx = spatialCurrentPage - 1;
+  const pageData = pages[pageIdx];
+  
+  if (!pageData) {
+    imageSide.innerHTML = '<div class="spatial-no-data"><div class="icon">📄</div><p>No page data found</p></div>';
+    textSide.innerHTML = '<div class="spatial-no-data"><div class="icon">📝</div><p>No OCR data for this page</p></div>';
+    return;
+  }
+  
+  // Render image side
+  const paddedPage = String(spatialCurrentPage).padStart(3, '0');
+  const preprocessedArtifact = spatialArtifacts.find(a => a.name === `page_${paddedPage}_preprocessed`);
+  const ocrArtifact = spatialArtifacts.find(a => a.name === `page_${paddedPage}_ocr`);
+  const anyArtifact = preprocessedArtifact || ocrArtifact || spatialArtifacts.find(a => a.name.includes(`page_${paddedPage}`));
+  
+  if (anyArtifact) {
+    imageSide.innerHTML = `<img src="${anyArtifact.url}" alt="Page ${spatialCurrentPage}" id="spatialPageImg" onload="onSpatialImageLoad()">`;
+  } else {
+    imageSide.innerHTML = '<div class="spatial-no-data"><div class="icon">🖼</div><p>No page image available</p><small>Artifacts may not have been generated</small></div>';
+  }
+  
+  // Render text side with positioned elements
+  renderSpatialTextOverlay(pageData, textSide);
+}
+
+function onSpatialImageLoad() {
+  // Re-render text side to match image dimensions if needed
+  const img = $('#spatialPageImg');
+  const textSide = $('#spatialTextSide');
+  if (img && textSide) {
+    // Set min-height to match image
+    textSide.style.minHeight = img.naturalHeight ? `${img.offsetHeight}px` : '500px';
+  }
+}
+
+function renderSpatialTextOverlay(pageData, container) {
+  // ═══════════════════════════════════════════════════════════════════
+  // EXACT SPATIAL LAYOUT - Text positioned at exact document coordinates
+  // with hover-to-expand for overlapping text
+  // ═══════════════════════════════════════════════════════════════════
+  
+  const meta = pageData.metadata || {};
+  
+  // Calculate actual page dimensions from content if not in metadata
+  // This handles documents where text coordinates exceed metadata dimensions
+  const artifactLines = pageData.text_lines || [];
+  let maxX = 0, maxY = 0;
+  artifactLines.forEach(line => {
+    if (line.bbox) {
+      const x2 = line.bbox.x2 ?? line.bbox[2] ?? 0;
+      const y2 = line.bbox.y2 ?? line.bbox[3] ?? 0;
+      if (x2 > maxX) maxX = x2;
+      if (y2 > maxY) maxY = y2;
+    }
+  });
+  
+  // Use whichever is larger: metadata dimensions or calculated from content
+  const pageWidth = Math.max(meta.width || 2550, maxX + 50);
+  const pageHeight = Math.max(meta.height || 3300, maxY + 50);
+  
+  // Use a fixed display width and scale everything proportionally
+  const displayWidth = 800;
+  const scale = displayWidth / pageWidth;
+  const displayHeight = Math.round(pageHeight * scale);
+  
+  // Use text_lines for BOTH display AND counting (same source as artifacts tab)
+  const textLines = [];
+  
+  // Debug: log low confidence items
+  const lowConfDebug = artifactLines.filter(l => (l.confidence || 0) < 0.5);
+  console.log('Low confidence items from text_lines:', lowConfDebug.map(l => ({
+    text: l.text,
+    confidence: l.confidence,
+    hasBbox: !!l.bbox,
+    bbox: l.bbox
+  })));
+  
+  // Debug page dimensions
+  console.log('Page dimensions:', { pageWidth, pageHeight, displayWidth, scale });
+  
+  artifactLines.forEach((line) => {
+    if (!line || !line.text) return;
+    const text = line.text.trim();
+    if (!text) return;
+    const bbox = line.bbox || {};
+    const x1 = bbox.x1 ?? bbox[0] ?? 0;
+    const y1 = bbox.y1 ?? bbox[1] ?? 0;
+    const x2 = bbox.x2 ?? bbox[2] ?? x1 + 100;
+    const y2 = bbox.y2 ?? bbox[3] ?? y1 + 20;
+    const hasBbox = !!(line.bbox && (line.bbox.x1 !== undefined || line.bbox[0] !== undefined));
+    textLines.push({ 
+      text, 
+      confidence: line.confidence ?? 0,
+      x1, y1, x2, y2,
+      hasBbox
+    });
+  });
+  
+  // Count confidence (same as artifacts tab)
+  const lowCount = textLines.filter(l => (l.confidence || 0) < 0.5).length;
+  const medCount = textLines.filter(l => (l.confidence || 0) >= 0.5 && (l.confidence || 0) < 0.8).length;
+  const highCount = textLines.length - lowCount - medCount;
+  const totalLines = textLines.length;
+  
+  // Debug: log what will be rendered
+  const lowWithBbox = textLines.filter(l => (l.confidence || 0) < 0.5 && l.hasBbox);
+  console.log('Low confidence items WITH bbox (will be rendered):', lowWithBbox);
+  
+  // Collect tables
+  const pageTables = [];
+  const seenTableIds = new Set();
+  
+  const addTable = (table) => {
+    if (!table || !table.bbox) return;
+    const tableId = table.id || `t_${Math.round(table.bbox?.x1 ?? 0)}_${Math.round(table.bbox?.y1 ?? 0)}`;
+    if (!seenTableIds.has(tableId)) {
+      seenTableIds.add(tableId);
+      pageTables.push(table);
+    }
+  };
+  
+  (currentResult.tables || [])
+    .filter(t => (t.page || 1) === spatialCurrentPage)
+    .forEach(addTable);
+  (pageData.tables || []).forEach(addTable);
+  
+  // Get all text lines with bbox for display (don't filter by table overlap anymore)
+  const filteredTextLines = textLines.filter(line => line.hasBbox);
+  
+  // Debug: Show what will be rendered
+  console.log('Filtered text lines count:', filteredTextLines.length);
+  console.log('Low conf in filtered:', filteredTextLines.filter(l => l.confidence < 0.5));
+  console.log('Scale and dimensions:', { pageWidth, pageHeight, displayWidth, displayHeight, scale });
+  
+  if (textLines.length === 0 && pageTables.length === 0) {
+    container.innerHTML = '<div class="spatial-no-data"><div class="icon">📝</div><p>No OCR content available</p></div>';
+    return;
+  }
+  
+  // Build the spatial reconstructed view
+  let html = `<div class="spatial-reconstructed" style="width:${displayWidth}px;height:${displayHeight}px;position:relative;overflow:visible;">`;
+  
+  // Render text lines at exact positions
+  filteredTextLines.forEach((line, idx) => {
+    const left = Math.round(line.x1 * scale);
+    const top = Math.round(line.y1 * scale);
+    const width = Math.max(20, Math.round((line.x2 - line.x1) * scale));
+    const height = Math.max(12, Math.round((line.y2 - line.y1) * scale));
+    
+    const conf = line.confidence || 0;
+    let confClass = '';
+    let inlineStyle = '';
+    if (conf < 0.5) { 
+      confClass = ' low-conf'; 
+      inlineStyle = 'background:rgba(254,226,226,0.95);border-left-color:#dc2626;color:#dc2626;';
+    }
+    else if (conf < 0.8) { 
+      confClass = ' med-conf'; 
+      inlineStyle = 'background:rgba(254,243,199,0.95);border-left-color:#f59e0b;color:#92400e;';
+    }
+    else { 
+      confClass = ' high-conf'; 
+      inlineStyle = 'background:rgba(220,252,231,0.95);border-left-color:#22c55e;color:#166534;';
+    }
+    
+    const confPct = Math.round(conf * 100);
+    // Truncate display text if too long, full text shown on hover
+    const displayText = line.text.length > 50 ? line.text.substring(0, 47) + '...' : line.text;
+    
+    html += `<div class="spatial-text${confClass}" 
+      style="left:${left}px;top:${top}px;max-width:${width}px;min-height:${Math.max(10, height - 4)}px;${inlineStyle}"
+      title="${confPct}% confidence: ${esc(line.text)}"
+      data-full-text="${esc(line.text)}">${esc(displayText)}</div>`;
+  });
+  
+  // Render tables at exact positions
+  pageTables.forEach((table, tidx) => {
+    const bbox = normalizeBbox(table.bbox);
+    const left = Math.round(bbox.x1 * scale);
+    const top = Math.round(bbox.y1 * scale);
+    const width = Math.max(50, Math.round((bbox.x2 - bbox.x1) * scale));
+    const height = Math.max(30, Math.round((bbox.y2 - bbox.y1) * scale));
+    
+    html += `<div class="spatial-table" style="left:${left}px;top:${top}px;width:${width}px;height:${height}px;">`;
+    
+    // Render table cells
+    if (table.cells && table.cells.length > 0) {
+      table.cells.forEach(cell => {
+        if (!cell.bbox) return;
+        const cellBbox = normalizeBbox(cell.bbox);
+        // Position relative to table
+        const cellLeft = Math.round((cellBbox.x1 - bbox.x1) * scale);
+        const cellTop = Math.round((cellBbox.y1 - bbox.y1) * scale);
+        const cellWidth = Math.max(20, Math.round((cellBbox.x2 - cellBbox.x1) * scale));
+        const cellHeight = Math.max(12, Math.round((cellBbox.y2 - cellBbox.y1) * scale));
+        
+        const isHeader = cell.is_header ? ' header' : '';
+        const cellConf = cell.confidence || 1;
+        let cellConfClass = '';
+        // Only apply styling, don't count (artifacts only counts text_lines, not table cells)
+        if (cellConf < 0.5) { cellConfClass = ' low-conf'; }
+        else if (cellConf < 0.8) { cellConfClass = ' med-conf'; }
+        else { cellConfClass = ' high-conf'; }
+        const cellConfPct = Math.round(cellConf * 100);
+        const cellText = cell.text || '';
+        const displayCellText = cellText.length > 30 ? cellText.substring(0, 27) + '...' : cellText;
+        
+        html += `<div class="spatial-table-cell${isHeader}${cellConfClass}" 
+          style="left:${cellLeft}px;top:${cellTop}px;width:${cellWidth}px;height:${cellHeight}px;"
+          title="${cellConfPct}% confidence: ${esc(cellText)}"
+          data-full-text="${esc(cellText)}">${esc(displayCellText)}</div>`;
+      });
+    }
+    
+    html += '</div>';
+  });
+  
+  html += '</div>';
+  
+  // Find low/medium confidence items that weren't rendered (no bbox)
+  const renderedSet = new Set(filteredTextLines.map(l => l.text));
+  const lowConfItems = textLines.filter(l => (l.confidence || 0) < 0.5);
+  const medConfItems = textLines.filter(l => (l.confidence || 0) >= 0.5 && (l.confidence || 0) < 0.8);
+  const lowNotRendered = lowConfItems.filter(l => !l.hasBbox);
+  const medNotRendered = medConfItems.filter(l => !l.hasBbox);
+  
+  // Add info bar with confidence counts from artifacts tab (text_lines)
+  html += `<div style="font-size:12px;color:#444;padding:10px 12px;border-top:1px solid #ddd;background:#f5f5f5;display:flex;flex-wrap:wrap;gap:12px;align-items:center;">
+    <span><strong>${totalLines}</strong> lines (${filteredTextLines.length} shown)</span>
+    <span style="color:#888">|</span>
+    <span style="background:#dcfce7;color:#166534;padding:2px 8px;border-radius:3px;border-left:3px solid #22c55e;"><strong>${highCount}</strong> high</span>
+    <span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:3px;border-left:3px solid #f59e0b;"><strong>${medCount}</strong> medium</span>
+    <span style="background:#fee2e2;color:#dc2626;padding:2px 8px;border-radius:3px;border-left:3px solid #dc2626;"><strong>${lowCount}</strong> low</span>
+    <span style="color:#888;margin-left:auto;font-size:11px;"><em>Hover for full text + confidence %</em></span>
+  </div>`;
+  
+  // Show low-confidence items that couldn't be positioned (no bbox)
+  if (lowNotRendered.length > 0 || medNotRendered.length > 0) {
+    html += `<details style="font-size:11px;padding:8px 12px;border-top:1px solid #eee;background:#fafafa;">
+      <summary style="cursor:pointer;color:#666;">⚠ ${lowNotRendered.length + medNotRendered.length} low/medium items without position data</summary>
+      <div style="margin-top:6px;max-height:150px;overflow-y:auto;">`;
+    lowNotRendered.forEach(l => {
+      const pct = Math.round((l.confidence || 0) * 100);
+      html += `<div style="padding:2px 0;color:#dc2626;"><span style="background:#fee2e2;padding:1px 4px;border-radius:2px;font-size:10px;">${pct}%</span> "${esc(l.text)}"</div>`;
+    });
+    medNotRendered.forEach(l => {
+      const pct = Math.round((l.confidence || 0) * 100);
+      html += `<div style="padding:2px 0;color:#92400e;"><span style="background:#fef3c7;padding:1px 4px;border-radius:2px;font-size:10px;">${pct}%</span> "${esc(l.text)}"</div>`;
+    });
+    html += `</div></details>`;
+  }
+  
+  container.innerHTML = html;
+}
+
+// Render a table as a clean HTML table
+function renderCleanTable(table) {
+  if (!table.cells || table.cells.length === 0) {
+    return '<p class="text-line">Empty table</p>';
+  }
+  
+  // Find table dimensions
+  let maxRow = 0, maxCol = 0;
+  table.cells.forEach(cell => {
+    const row = cell.row ?? 0;
+    const col = cell.col ?? 0;
+    const rowSpan = cell.row_span ?? 1;
+    const colSpan = cell.col_span ?? 1;
+    maxRow = Math.max(maxRow, row + rowSpan);
+    maxCol = Math.max(maxCol, col + colSpan);
+  });
+  
+  // Create 2D grid
+  const grid = Array(maxRow).fill(null).map(() => Array(maxCol).fill(null));
+  const occupied = Array(maxRow).fill(null).map(() => Array(maxCol).fill(false));
+  
+  // Place cells in grid
+  table.cells.forEach(cell => {
+    const row = cell.row ?? 0;
+    const col = cell.col ?? 0;
+    const rowSpan = cell.row_span ?? 1;
+    const colSpan = cell.col_span ?? 1;
+    
+    // Find first unoccupied position
+    let startRow = row, startCol = col;
+    while (startRow < maxRow && startCol < maxCol && occupied[startRow][startCol]) {
+      startCol++;
+      if (startCol >= maxCol) {
+        startCol = 0;
+        startRow++;
+      }
+    }
+    
+    if (startRow < maxRow && startCol < maxCol) {
+      grid[startRow][startCol] = {
+        text: cell.text || '',
+        isHeader: cell.is_header || startRow === 0,
+        rowSpan,
+        colSpan,
+        confidence: cell.confidence || 1
+      };
+      
+      // Mark occupied cells
+      for (let r = startRow; r < Math.min(startRow + rowSpan, maxRow); r++) {
+        for (let c = startCol; c < Math.min(startCol + colSpan, maxCol); c++) {
+          occupied[r][c] = true;
+        }
+      }
+    }
+  });
+  
+  // Generate HTML table
+  let html = '<table>';
+  for (let r = 0; r < maxRow; r++) {
+    html += '<tr>';
+    for (let c = 0; c < maxCol; c++) {
+      const cell = grid[r][c];
+      if (cell === null) {
+        // Check if this cell is part of a span (skip it)
+        if (!occupied[r][c]) {
+          html += '<td></td>';
+        }
+        continue;
+      }
+      
+      const tag = cell.isHeader ? 'th' : 'td';
+      const spanAttrs = [];
+      if (cell.rowSpan > 1) spanAttrs.push(`rowspan="${cell.rowSpan}"`);
+      if (cell.colSpan > 1) spanAttrs.push(`colspan="${cell.colSpan}"`);
+      const confClass = cell.confidence < 0.7 ? ' class="low-conf"' : '';
+      
+      html += `<${tag} ${spanAttrs.join(' ')}${confClass}>${esc(cell.text)}</${tag}>`;
+    }
+    html += '</tr>';
+  }
+  html += '</table>';
+  
+  return html;
+}
+
+// Convert bbox to pixel position with scaling
+function bboxToPixels(bbox, scale) {
+  let x1, y1;
+  
+  if (Array.isArray(bbox)) {
+    [x1, y1] = bbox;
+  } else if (bbox.x1 !== undefined) {
+    x1 = bbox.x1;
+    y1 = bbox.y1;
+  } else if (bbox.x !== undefined) {
+    x1 = bbox.x;
+    y1 = bbox.y;
+  } else {
+    return { left: 0, top: 0 };
+  }
+  
+  return {
+    left: Math.round(x1 * scale),
+    top: Math.round(y1 * scale)
+  };
+}
+
+// Convert bbox to pixel rect (position + size) with scaling
+function bboxToPixelsRect(bbox, scale) {
+  let x1, y1, x2, y2;
+  
+  if (Array.isArray(bbox)) {
+    [x1, y1, x2, y2] = bbox;
+  } else if (bbox.x1 !== undefined) {
+    x1 = bbox.x1;
+    y1 = bbox.y1;
+    x2 = bbox.x2;
+    y2 = bbox.y2;
+  } else if (bbox.x !== undefined && bbox.width !== undefined) {
+    x1 = bbox.x;
+    y1 = bbox.y;
+    x2 = bbox.x + bbox.width;
+    y2 = bbox.y + bbox.height;
+  } else {
+    return { left: 0, top: 0, width: 50, height: 20 };
+  }
+  
+  return {
+    left: Math.round(x1 * scale),
+    top: Math.round(y1 * scale),
+    width: Math.max(10, Math.round((x2 - x1) * scale)),
+    height: Math.max(10, Math.round((y2 - y1) * scale))
+  };
+}
+
+function bboxToPercent(bbox, pageWidth, pageHeight) {
+  // Handle different bbox formats: {x1,y1,x2,y2} or [x1,y1,x2,y2]
+  let x1, y1, x2, y2;
+  
+  if (Array.isArray(bbox)) {
+    [x1, y1, x2, y2] = bbox;
+  } else if (bbox.x1 !== undefined) {
+    x1 = bbox.x1;
+    y1 = bbox.y1;
+    x2 = bbox.x2;
+    y2 = bbox.y2;
+  } else if (bbox.x !== undefined && bbox.width !== undefined) {
+    x1 = bbox.x;
+    y1 = bbox.y;
+    x2 = bbox.x + bbox.width;
+    y2 = bbox.y + bbox.height;
+  } else {
+    return { left: 0, top: 0, width: 5, height: 2 };
+  }
+  
+  // Convert to percentages
+  const left = (x1 / pageWidth) * 100;
+  const top = (y1 / pageHeight) * 100;
+  const width = ((x2 - x1) / pageWidth) * 100;
+  const height = ((y2 - y1) / pageHeight) * 100;
+  
+  return {
+    left: Math.max(0, left),
+    top: Math.max(0, top),
+    width: Math.max(1, Math.min(100 - left, width)),
+    height: Math.max(0.5, Math.min(100 - top, height))
+  };
+}
+
+// Normalize bbox to {x1,y1,x2,y2} format
+function normalizeBbox(bbox) {
+  if (Array.isArray(bbox)) {
+    return { x1: bbox[0], y1: bbox[1], x2: bbox[2], y2: bbox[3] };
+  }
+  if (bbox.x1 !== undefined) {
+    return { x1: bbox.x1, y1: bbox.y1, x2: bbox.x2, y2: bbox.y2 };
+  }
+  if (bbox.x !== undefined && bbox.width !== undefined) {
+    return { x1: bbox.x, y1: bbox.y, x2: bbox.x + bbox.width, y2: bbox.y + bbox.height };
+  }
+  return { x1: 0, y1: 0, x2: 0, y2: 0 };
+}
+
+// Calculate overlap ratio of bbox A inside bbox B
+function bboxOverlap(a, b) {
+  const x1 = Math.max(a.x1, b.x1);
+  const y1 = Math.max(a.y1, b.y1);
+  const x2 = Math.min(a.x2, b.x2);
+  const y2 = Math.min(a.y2, b.y2);
+  
+  if (x1 >= x2 || y1 >= y2) return 0; // No overlap
+  
+  const overlapArea = (x2 - x1) * (y2 - y1);
+  const aArea = (a.x2 - a.x1) * (a.y2 - a.y1);
+  
+  return aArea > 0 ? overlapArea / aArea : 0;
+}
+
 function rptMeta(label, value) {
   return `<div class="report-meta-item"><div class="rml">${label}</div><div class="rmv">${esc(String(value))}</div></div>`;
 }
@@ -1500,7 +2216,9 @@ function renderCosts(data) {
   }
   tbody.innerHTML = [...records].reverse().map(r => {
     const svcCls = r.service === 'doc_intelligence' ? 'svc-di' : 'svc-gpt';
-    const svcLbl = r.service === 'doc_intelligence' ? '🔍 DI' : '🤖 GPT';
+    const svcLbl = r.service === 'doc_intelligence' 
+      ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></svg>DI' 
+      : '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px"><path d="M12 8V4H8"/><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11v6"/><path d="m9 14 3-3 3 3"/></svg>GPT';
     const detail = r.service === 'doc_intelligence'
       ? (r.pages || 0) + ' page' + ((r.pages || 0) !== 1 ? 's' : '')
       : ((r.prompt_tokens || 0) + (r.completion_tokens || 0)).toLocaleString() + ' tok';

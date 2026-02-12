@@ -91,6 +91,8 @@ class DocumentProcessor:
         self._donut = None
         self._layoutlmv3 = None
         self._fuser = None
+        self._style_extractor = None
+        self._targeted_reocr = None
 
         # Azure cloud providers (lazy)
         self._azure_di_provider = None
@@ -237,6 +239,55 @@ class DocumentProcessor:
                 }
             )
         return self._fuser
+
+    @property
+    def style_extractor(self):
+        """Lazy load style extractor for font/style information."""
+        if self._style_extractor is None:
+            from docvision.extract.pdf_style_extractor import StyleExtractor
+            self._style_extractor = StyleExtractor()
+        return self._style_extractor
+
+    @property
+    def targeted_reocr(self):
+        """Lazy load targeted re-OCR processor for low-confidence regions."""
+        if self._targeted_reocr is None:
+            from docvision.ocr.targeted_reocr import TargetedReOCR, ReOCRConfig, ReOCRStrategy
+            
+            # Map string strategy from config to enum
+            strategy_map = {
+                "ensemble": ReOCRStrategy.ENSEMBLE,
+                "trocr_only": ReOCRStrategy.TROCR_ONLY,
+                "tesseract": ReOCRStrategy.TESSERACT_ONLY,
+                "sequential": ReOCRStrategy.SEQUENTIAL,
+            }
+            strategy = strategy_map.get(
+                self.config.reocr.strategy,
+                ReOCRStrategy.ENSEMBLE
+            )
+            
+            reocr_config = ReOCRConfig(
+                confidence_threshold=self.config.reocr.confidence_threshold,
+                improvement_threshold=self.config.reocr.improvement_threshold,
+                strategy=strategy,
+                max_reocr_lines=self.config.reocr.max_lines_per_page,
+                scale_factor=self.config.reocr.scale_factor,
+                enhanced_denoise_strength=self.config.reocr.enhanced_denoise,
+                enhanced_clahe_clip=self.config.reocr.enhanced_clahe,
+                enhanced_sharpen_strength=self.config.reocr.enhanced_sharpen,
+                apply_binarization=self.config.reocr.apply_binarization,
+                apply_morphology=self.config.reocr.apply_morphology,
+                azure_retry_enabled=self.config.reocr.azure_retry_enabled,
+                azure_retry_threshold=self.config.reocr.azure_retry_threshold,
+            )
+            
+            self._targeted_reocr = TargetedReOCR(
+                config=reocr_config,
+                trocr_recognizer=self._trocr,  # Share existing recognizers
+                tesseract_recognizer=self._tesseract,
+                device=self.device
+            )
+        return self._targeted_reocr
 
     @property
     def cost_tracker(self):
@@ -421,6 +472,7 @@ class DocumentProcessor:
                     file_label,
                     options,
                     gpt_deployment_override=gpt_deployment_override,
+                    pdf_path=path if file_type == "pdf" else None,
                 )
                 
                 pages.append(page_result["page"])
@@ -489,6 +541,53 @@ class DocumentProcessor:
         else:
             return "unknown"
     
+    def _bboxes_overlap(self, bbox1: List[float], bbox2: List[float], threshold: float = 0.5) -> bool:
+        """Check if two bounding boxes overlap significantly."""
+        if not bbox1 or not bbox2 or len(bbox1) < 4 or len(bbox2) < 4:
+            return False
+        
+        x1_min, y1_min, x1_max, y1_max = bbox1[0], bbox1[1], bbox1[2], bbox1[3]
+        x2_min, y2_min, x2_max, y2_max = bbox2[0], bbox2[1], bbox2[2], bbox2[3]
+        
+        # Compute intersection
+        inter_x_min = max(x1_min, x2_min)
+        inter_y_min = max(y1_min, y2_min)
+        inter_x_max = min(x1_max, x2_max)
+        inter_y_max = min(y1_max, y2_max)
+        
+        if inter_x_max <= inter_x_min or inter_y_max <= inter_y_min:
+            return False
+        
+        inter_area = (inter_x_max - inter_x_min) * (inter_y_max - inter_y_min)
+        bbox1_area = max((x1_max - x1_min) * (y1_max - y1_min), 1)
+        
+        return (inter_area / bbox1_area) >= threshold
+
+    def _estimate_text_line_styles(
+        self, text_lines: List[Any], page_height: float, page_num: int
+    ) -> None:
+        """Estimate styles for text lines when PDF-native extraction isn't available."""
+        from docvision.extract.pdf_style_extractor import estimate_style_from_bbox
+        
+        for line in text_lines:
+            if not hasattr(line, 'bbox') or not line.bbox:
+                continue
+            
+            bbox_height = line.bbox.y2 - line.bbox.y1
+            y_position = line.bbox.y1
+            
+            # Get layout role if available
+            role = getattr(line, 'role', None)
+            
+            estimated = estimate_style_from_bbox(
+                text=line.text or "",
+                bbox_height=bbox_height,
+                y_position=y_position,
+                page_height=page_height,
+                role=role
+            )
+            line.style = estimated
+
     def _process_page(
         self,
         image: np.ndarray,
@@ -496,6 +595,7 @@ class DocumentProcessor:
         doc_id: str,
         options: ProcessingOptions,
         gpt_deployment_override: Optional[str] = None,
+        pdf_path: Optional[Path] = None,
     ) -> Dict[str, Any]:
         """Process a single page."""
         # Route to Azure cloud pipeline when mode is "azure"
@@ -593,10 +693,48 @@ class DocumentProcessor:
             if self.tesseract:
                 text_lines = self._run_tesseract_backup(processed, text_lines)
             
+            # Targeted re-OCR for remaining low-confidence regions
+            if self.config.reocr.enable and text_lines:
+                text_lines = self.targeted_reocr.process_local(
+                    processed, text_lines, content_type, in_place=True
+                )
+            
             if options.save_artifacts:
                 self.artifact_manager.save_ocr_overlay(
                     processed, text_lines, doc_id, page_num
                 )
+        
+        # Style extraction (PDF-native for digital PDFs, estimation for scanned/images)
+        if text_lines and pdf_path:
+            try:
+                # extract_from_pdf returns (dict[page_num -> spans], source)
+                styles_dict, source = self.style_extractor.extract_from_pdf(
+                    pdf_path, page_numbers=[page_num]
+                )
+                styled_spans = styles_dict.get(page_num, [])
+                
+                if styled_spans:
+                    # Update text_lines with style info from PDF
+                    for line in text_lines:
+                        if hasattr(line, 'bbox') and line.bbox:
+                            line_bbox = [line.bbox.x1, line.bbox.y1, line.bbox.x2, line.bbox.y2]
+                            matching_spans = [
+                                s for s in styled_spans 
+                                if self._bboxes_overlap(line_bbox, [s.x, s.y, s.x + s.width, s.y + s.height])
+                            ]
+                            if matching_spans:
+                                # Use the most confident/common style for the line
+                                best_span = max(matching_spans, key=lambda s: s.style.confidence)
+                                line.style = best_span.style
+                else:
+                    # PDF-native failed or scanned - fall through to estimation
+                    self._estimate_text_line_styles(text_lines, h, page_num)
+            except Exception as e:
+                logger.warning(f"Style extraction failed for page {page_num}: {e}")
+                self._estimate_text_line_styles(text_lines, h, page_num)
+        elif text_lines:
+            # No PDF - estimate styles from bbox/text characteristics
+            self._estimate_text_line_styles(text_lines, h, page_num)
         
         # Build raw text
         raw_text = "\n".join(line.text for line in text_lines if line.text)
@@ -735,6 +873,22 @@ class DocumentProcessor:
                 # Anchor GPT Vision fields to Azure DI spatial coordinates
                 self._anchor_fields_to_text(fields, text_lines, tables)
 
+            # ── Style estimation for Azure batch pipeline ──────────────
+            if text_lines:
+                from docvision.extract.pdf_style_extractor import estimate_style_from_bbox
+                for line in text_lines:
+                    if not hasattr(line, 'bbox') or not line.bbox:
+                        continue
+                    bbox_height = line.bbox.y2 - line.bbox.y1
+                    estimated = estimate_style_from_bbox(
+                        text=line.text or "",
+                        bbox_height=bbox_height,
+                        y_position=line.bbox.y1,
+                        page_height=h,
+                        role=None,
+                    )
+                    line.style = estimated
+
             page = Page(
                 number=page_num,
                 metadata=PageMetadata(
@@ -859,6 +1013,36 @@ class DocumentProcessor:
 
             # Anchor GPT Vision fields to Azure DI spatial coordinates
             self._anchor_fields_to_text(fields, text_lines, tables)
+
+        # ── Style estimation for Azure pipeline ────────────────────
+        # Azure DI doesn't provide font/style info directly, so we estimate
+        # from bbox dimensions. LayoutRegions provide semantic roles for better estimation.
+        if text_lines:
+            # Build a role map from layout regions
+            role_map = {}
+            for region in layout_regions:
+                if hasattr(region, 'text_lines'):
+                    for tl in region.text_lines:
+                        if hasattr(tl, 'id'):
+                            role_map[tl.id] = region.type.value if hasattr(region.type, 'value') else str(region.type)
+            
+            # Estimate styles using bbox and role info
+            for line in text_lines:
+                if not hasattr(line, 'bbox') or not line.bbox:
+                    continue
+                
+                role = role_map.get(line.id) if hasattr(line, 'id') else None
+                bbox_height = line.bbox.y2 - line.bbox.y1
+                
+                from docvision.extract.pdf_style_extractor import estimate_style_from_bbox
+                estimated = estimate_style_from_bbox(
+                    text=line.text or "",
+                    bbox_height=bbox_height,
+                    y_position=line.bbox.y1,
+                    page_height=h,
+                    role=role
+                )
+                line.style = estimated
 
         # ── Build page object ───────────────────────────────────────
         page = Page(
@@ -1154,6 +1338,10 @@ class DocumentProcessor:
         
         # Convert to dict and serialize
         data = document.model_dump(mode="json")
+        
+        # Add reconstruction prompt for LLM-friendly visual reconstruction
+        from docvision.io.reconstruction import add_reconstruction_to_document
+        data = add_reconstruction_to_document(data)
         
         with open(filepath, "w", encoding="utf-8") as f:
             if self.config.output.pretty_json:

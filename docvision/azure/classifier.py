@@ -57,7 +57,7 @@ class ClassificationResult:
 # ── Routing table ───────────────────────────────────────────────────────────
 
 # Maps (doc_type, complexity) → recommended GPT deployment.
-# User said: default is gpt-4o-mini, scale UP for accuracy.
+# Available deployments: gpt-5.2, gpt-5-nano, gpt-5-mini, gpt-4o-mini, gpt-4.1-mini
 _GPT_ROUTING: Dict[str, Dict[str, str]] = {
     "simple": {
         "invoice": "gpt-4o-mini",
@@ -76,7 +76,7 @@ _GPT_ROUTING: Dict[str, Dict[str, str]] = {
     "complex": {
         "invoice": "gpt-4.1-mini",
         "receipt": "gpt-4o-mini",     # Receipts are rarely truly complex
-        "bol": "gpt-4.1",            # Dense multi-section BOLs
+        "bol": "gpt-5-mini",          # Dense multi-section BOLs - use gpt-5-mini
         "delivery_ticket": "gpt-4.1-mini",
         "other": "gpt-4.1-mini",
     },
