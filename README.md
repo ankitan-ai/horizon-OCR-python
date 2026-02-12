@@ -37,7 +37,7 @@ It supports **three processing modes**: a fully local ML pipeline (8 models), Az
 ### Infrastructure
 - **REST API & CLI** — FastAPI server and Typer CLI for flexible integration
 - **Docker Ready** — CPU and GPU Dockerfiles with docker-compose profiles (dev, prod, gpu, batch)
-- **291 Tests** — Unit, integration, web feature, and Azure smoke tests
+- **449 Tests** — Unit, integration, web feature, and Azure smoke tests
 
 ---
 
@@ -383,14 +383,14 @@ Azure credentials are passed as environment variables in `docker-compose.yml` �
 ## Testing
 
 ```bash
-# Run all tests (291 tests)
+# Run all tests (449 tests)
 pytest
 
 # Run with coverage
 pytest --cov=docvision --cov-report=html
 
 # Run specific test suites
-pytest tests/test_web_features.py     # Web UI feature tests (39)
+pytest tests/test_web_features.py     # Web UI feature tests (43)
 pytest tests/test_azure_smoke.py      # Azure smoke tests (15)
 pytest tests/test_cost_cache_batch.py # Cost/cache/batch tests (36)
 
@@ -412,18 +412,23 @@ docvision/
 ├── io/
 │   ├── pdf.py                # PDF loading & rasterization
 │   ├── image.py              # Image loading & normalization
-│   └── artifacts.py          # Debug overlay generation
+│   ├── artifacts.py          # Debug overlay generation
+│   ├── reconstruction.py     # Document reconstruction from extracted data
+│   └── markdown.py           # Markdown output generation
 ├── preprocess/
 │   ├── geometry.py           # Deskew, dewarp
 │   └── enhance.py            # Denoise, CLAHE, content detection
 ├── detect/
 │   ├── layout_doclaynet.py   # YOLO layout detection
 │   ├── text_craft.py         # CRAFT text detection
+│   ├── craft_net.py          # CRAFT neural network architecture
+│   ├── craft_utils.py        # CRAFT utility functions
 │   └── table_tatr.py         # Table Transformer detection
 ├── ocr/
 │   ├── trocr.py              # TrOCR recognizer (printed + handwritten)
 │   ├── tesseract.py          # Tesseract backup
-│   └── crops.py              # Image cropping utilities
+│   ├── crops.py              # Image cropping utilities
+│   └── targeted_reocr.py     # Targeted re-OCR for low-confidence regions
 ├── kie/
 │   ├── donut_runner.py       # Donut KIE (OCR-free)
 │   ├── layoutlmv3_runner.py  # LayoutLMv3 KIE (token classification)
@@ -434,11 +439,15 @@ docvision/
 ├── azure/
 │   ├── doc_intelligence.py   # Azure Document Intelligence client
 │   ├── gpt_vision_kie.py     # Azure OpenAI GPT Vision KIE
+│   ├── classifier.py         # Azure-based document classifier
 │   ├── cost_tracker.py       # Per-request cost estimation
 │   └── response_cache.py     # SHA-256 content-addressed response cache
 ├── web/
 │   ├── app.py                # FastAPI web server (all API endpoints)
-│   └── index.html            # Single-page application (inline CSS/JS)
+│   ├── index.html            # Single-page application (inline CSS/JS)
+│   └── static/               # Static assets
+├── extract/
+│   └── pdf_style_extractor.py # PDF style & font extraction
 ├── api/
 │   └── server.py             # Legacy FastAPI server (CLI-based)
 └── cli/
@@ -471,9 +480,10 @@ docvision/
 ### Optional Extras
 
 ```bash
-pip install -e ".[azure]"      # azure-ai-documentintelligence, openai
+pip install -e ".[azure]"      # azure-ai-documentintelligence, openai, python-dotenv
 pip install -e ".[preview]"    # pdf2image (requires poppler)
 pip install -e ".[tesseract]"  # pytesseract (requires system Tesseract)
+pip install -e ".[models]"     # huggingface-hub (for downloading models)
 pip install -e ".[dev]"        # pytest, black, ruff, mypy
 ```
 
