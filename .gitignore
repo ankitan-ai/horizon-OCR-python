@@ -53,6 +53,7 @@ htmlcov/
 data/
 output/
 artifacts/
+markdown/
 .cache/
 *.pdf
 *.jpg
@@ -86,3 +87,11 @@ secrets/
 
 # Build artifacts
 *.whl
+
+# Playwright
+node_modules/
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/
