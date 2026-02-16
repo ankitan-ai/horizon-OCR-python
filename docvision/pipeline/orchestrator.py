@@ -301,12 +301,22 @@ class DocumentProcessor:
         return self._cost_tracker
 
     @property
+    def has_cost_tracker(self) -> bool:
+        """Check if cost tracker has been initialised (without triggering lazy load)."""
+        return self._cost_tracker is not None
+
+    @property
     def response_cache(self):
         """Lazy load response cache (shared across all Azure providers)."""
         if self._response_cache is None:
             from docvision.azure.response_cache import ResponseCache
             self._response_cache = ResponseCache()
         return self._response_cache
+
+    @property
+    def has_response_cache(self) -> bool:
+        """Check if response cache has been initialised (without triggering lazy load)."""
+        return self._response_cache is not None
 
     @property
     def azure_di_provider(self):

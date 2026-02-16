@@ -290,6 +290,11 @@ async def process_document(
             with concurrent.futures.ThreadPoolExecutor() as pool:
                 result = await loop.run_in_executor(pool, _do_process)
 
+            # Check if cancelled while processing
+            if _jobs.get(job_id, {}).get("status") == "cancelled":
+                logger.info(f"Job {job_id} was cancelled — discarding result")
+                return
+
             if result.success:
                 doc_dict = result.document.model_dump(mode="json")
                 artifacts_dir_path = ARTIFACTS_BASE / mode_subfolder / Path(result.document.metadata.filename).stem
@@ -314,7 +319,7 @@ async def process_document(
             logger.exception("Processing failed")
             _update_job(job_id, status="failed", error=str(exc))
 
-    asyncio.ensure_future(_run())
+    asyncio.create_task(_run())
     return {"job_id": job_id}
 
 
@@ -405,6 +410,11 @@ async def process_batch(
                 with concurrent.futures.ThreadPoolExecutor() as pool:
                     result = await loop.run_in_executor(pool, _do_process)
 
+                # Check if cancelled while processing
+                if _jobs.get(jid, {}).get("status") == "cancelled":
+                    logger.info(f"Batch job {jid} was cancelled — discarding result")
+                    return
+
                 if result.success:
                     doc_dict = result.document.model_dump(mode="json")
                     artifacts_dir_path = ARTIFACTS_BASE / msub / Path(result.document.metadata.filename).stem
@@ -426,7 +436,7 @@ async def process_batch(
                 logger.exception(f"Batch processing failed for {jid}")
                 _update_job_batch(jid, status="failed", error=str(exc))
 
-        asyncio.ensure_future(_run_batch())
+        asyncio.create_task(_run_batch())
 
     return {"job_ids": job_ids, "count": len(job_ids)}
 
@@ -540,6 +550,21 @@ async def get_job(job_id: str):
     }
 
 
+@app.post("/api/jobs/{job_id}/cancel")
+async def cancel_job(job_id: str):
+    """Mark a running job as cancelled."""
+    if job_id not in _jobs:
+        raise HTTPException(404, "Job not found")
+    job = _jobs[job_id]
+    if job["status"] in ("processing", "queued"):
+        with _jobs_lock:
+            _jobs[job_id]["status"] = "cancelled"
+            _jobs[job_id]["error"] = "Cancelled by user"
+        logger.info(f"Job {job_id} cancelled by user")
+        return {"ok": True}
+    return {"ok": False, "reason": f"Job is already {job['status']}"}
+
+
 @app.get("/api/jobs/{job_id}/result")
 async def get_result(job_id: str):
     if job_id not in _jobs:
@@ -643,7 +668,7 @@ async def reset_costs():
     """Reset cost tracking counters."""
     if _processor is None:
         raise HTTPException(503, "Service not initialised")
-    if _processor._cost_tracker is not None:
+    if _processor.has_cost_tracker:
         _processor.cost_tracker.reset()
     return {"ok": True}
 
@@ -654,7 +679,7 @@ async def clear_cache():
     if _processor is None:
         raise HTTPException(503, "Service not initialised")
     count = 0
-    if _processor._response_cache is not None:
+    if _processor.has_response_cache:
         count = _processor.response_cache.clear()
     return {"ok": True, "entries_cleared": count}
 
