@@ -155,7 +155,7 @@ class AzureDocIntelligenceProvider:
             body=AnalyzeDocumentRequest(bytes_source=image_bytes),
             output_content_format="text",
         )
-        result = poller.result()
+        result = poller.result(timeout=120)  # fail after 2 minutes instead of hanging
 
         elapsed = time.perf_counter() - t0
         logger.info(f"Azure response received in {elapsed:.2f}s")
@@ -247,7 +247,7 @@ class AzureDocIntelligenceProvider:
             body=AnalyzeDocumentRequest(bytes_source=file_bytes),
             output_content_format="text",
         )
-        result = poller.result()
+        result = poller.result(timeout=300)  # multi-page: 5 min timeout
 
         elapsed = time.perf_counter() - t0
         logger.info(f"Azure response received in {elapsed:.2f}s")

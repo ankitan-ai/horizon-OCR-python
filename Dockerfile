@@ -29,7 +29,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     g++ \
     # Privilege drop in entrypoint
     gosu \
-    # Cleanup
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
@@ -48,11 +47,14 @@ RUN pip install --no-cache-dir torch torchvision --index-url https://download.py
 # Install remaining Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Remove build tools no longer needed (saves ~100MB)
+RUN apt-get purge -y gcc g++ && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
+
 # Copy application code
 COPY . .
 
-# Install the package
-RUN pip install --no-cache-dir -e .
+# Install the package (non-editable for production)
+RUN pip install --no-cache-dir .
 
 # Copy example config as default (can be overridden by volume mount)
 RUN cp config.example.yaml config.yaml

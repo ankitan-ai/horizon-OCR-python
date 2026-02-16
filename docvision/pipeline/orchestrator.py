@@ -17,6 +17,7 @@ Coordinates all processing stages:
 import os
 import time
 import uuid
+import threading
 from pathlib import Path
 from typing import Optional, List, Union, Dict, Any, Callable
 from dataclasses import dataclass, field
@@ -81,6 +82,7 @@ class DocumentProcessor:
         """
         self.config = config or Config()
         self.device = self.config.runtime.get_device()
+        self._init_lock = threading.Lock()  # guards lazy component init
         
         # Initialize components lazily
         self._pdf_loader = None
@@ -149,22 +151,26 @@ class DocumentProcessor:
     def layout_detector(self):
         """Lazy load layout detector."""
         if self._layout_detector is None:
-            from docvision.detect.layout_doclaynet import LayoutDetector
-            self._layout_detector = LayoutDetector(
-                model_path=self.config.models.layout,
-                device=self.device
-            )
+            with self._init_lock:
+                if self._layout_detector is None:
+                    from docvision.detect.layout_doclaynet import LayoutDetector
+                    self._layout_detector = LayoutDetector(
+                        model_path=self.config.models.layout,
+                        device=self.device
+                    )
         return self._layout_detector
     
     @property
     def text_detector(self):
         """Lazy load text detector."""
         if self._text_detector is None:
-            from docvision.detect.text_craft import TextDetector
-            self._text_detector = TextDetector(
-                model_path=self.config.models.craft,
-                device=self.device
-            )
+            with self._init_lock:
+                if self._text_detector is None:
+                    from docvision.detect.text_craft import TextDetector
+                    self._text_detector = TextDetector(
+                        model_path=self.config.models.craft,
+                        device=self.device
+                    )
         return self._text_detector
     
     @property
@@ -182,12 +188,14 @@ class DocumentProcessor:
     def trocr(self):
         """Lazy load TrOCR."""
         if self._trocr is None:
-            from docvision.ocr.trocr import TrOCRRecognizer
-            self._trocr = TrOCRRecognizer(
-                printed_model=self.config.models.trocr_printed,
-                handwritten_model=self.config.models.trocr_handwritten,
-                device=self.device
-            )
+            with self._init_lock:
+                if self._trocr is None:
+                    from docvision.ocr.trocr import TrOCRRecognizer
+                    self._trocr = TrOCRRecognizer(
+                        printed_model=self.config.models.trocr_printed,
+                        handwritten_model=self.config.models.trocr_handwritten,
+                        device=self.device
+                    )
         return self._trocr
     
     @property
@@ -322,24 +330,28 @@ class DocumentProcessor:
     def azure_di_provider(self):
         """Lazy load Azure Document Intelligence provider."""
         if self._azure_di_provider is None:
-            from docvision.azure.doc_intelligence import AzureDocIntelligenceProvider
-            self._azure_di_provider = AzureDocIntelligenceProvider(
-                self.config.azure,
-                cost_tracker=self.cost_tracker,
-                response_cache=self.response_cache,
-            )
+            with self._init_lock:
+                if self._azure_di_provider is None:
+                    from docvision.azure.doc_intelligence import AzureDocIntelligenceProvider
+                    self._azure_di_provider = AzureDocIntelligenceProvider(
+                        self.config.azure,
+                        cost_tracker=self.cost_tracker,
+                        response_cache=self.response_cache,
+                    )
         return self._azure_di_provider
 
     @property
     def gpt_vision_extractor(self):
         """Lazy load GPT Vision KIE extractor."""
         if self._gpt_vision_extractor is None:
-            from docvision.azure.gpt_vision_kie import GPTVisionExtractor
-            self._gpt_vision_extractor = GPTVisionExtractor(
-                self.config.azure,
-                cost_tracker=self.cost_tracker,
-                response_cache=self.response_cache,
-            )
+            with self._init_lock:
+                if self._gpt_vision_extractor is None:
+                    from docvision.azure.gpt_vision_kie import GPTVisionExtractor
+                    self._gpt_vision_extractor = GPTVisionExtractor(
+                        self.config.azure,
+                        cost_tracker=self.cost_tracker,
+                        response_cache=self.response_cache,
+                    )
         return self._gpt_vision_extractor
 
     @property
@@ -417,6 +429,8 @@ class DocumentProcessor:
         
         logger.info(f"Processing document: {input_path} (ID: {doc_id})")
         _cb = options.progress_callback or (lambda stage, pct: None)
+        _di_model_overridden = False
+        _original_di_model = self.config.azure.doc_intelligence_model
 
         try:
             # Determine file type and load
@@ -464,8 +478,9 @@ class DocumentProcessor:
                 if gpt_deploy:
                     gpt_deployment_override = gpt_deploy
                 if di_model:
-                    # Temporarily override DI model for this request
+                    # Override DI model for this request only (thread-safe save/restore)
                     self.config.azure.doc_intelligence_model = di_model
+                    _di_model_overridden = True
 
             # ── Azure batch optimisation: send entire PDF in one DI call ──
             if (
@@ -550,6 +565,10 @@ class DocumentProcessor:
                 error=str(e),
                 error_details={"traceback": traceback.format_exc()}
             )
+        finally:
+            # Restore DI model if it was overridden by smart routing
+            if _di_model_overridden:
+                self.config.azure.doc_intelligence_model = _original_di_model
     
     def _get_file_type(self, path: Path) -> str:
         """Determine file type from extension."""
@@ -1413,12 +1432,13 @@ class DocumentProcessor:
         
         if parallel:
             from concurrent.futures import ThreadPoolExecutor, as_completed
+            from copy import copy
             
             workers = self.config.runtime.get_workers()
             
             with ThreadPoolExecutor(max_workers=workers) as executor:
                 futures = {
-                    executor.submit(self.process, path, options): path
+                    executor.submit(self.process, path, copy(options) if options else None): path
                     for path in input_paths
                 }
                 

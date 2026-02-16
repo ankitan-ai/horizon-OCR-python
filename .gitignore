@@ -84,6 +84,7 @@ Thumbs.db
 secrets/
 *.key
 *.pem
+config.yaml
 
 # Build artifacts
 *.whl

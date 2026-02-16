@@ -17,10 +17,10 @@ import tempfile
 import asyncio
 import shutil
 import threading
+import concurrent.futures
 from pathlib import Path
-from typing import Optional, Dict, Any, List
-from datetime import datetime
-from zoneinfo import ZoneInfo
+from typing import Optional, Dict, Any, List, Set
+from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, File, UploadFile, HTTPException, Form, Query
@@ -34,6 +34,9 @@ from docvision.io.markdown import generate_markdown, save_markdown
 from docvision.config import load_config, Config
 from docvision.pipeline import DocumentProcessor, ProcessingOptions
 
+# Max upload size: 100 MB
+_MAX_UPLOAD_BYTES = 100 * 1024 * 1024
+
 
 # ---------------------------------------------------------------------------
 # Global state
@@ -42,6 +45,8 @@ _processor: Optional[DocumentProcessor] = None
 _jobs: Dict[str, Dict[str, Any]] = {}
 _jobs_lock = threading.Lock()           # protects _jobs dict mutations
 _local_model_lock = threading.Lock()    # serialises local-model inference
+_background_tasks: Set[asyncio.Task] = set()  # prevent GC of fire-and-forget tasks
+_shared_pool: Optional[concurrent.futures.ThreadPoolExecutor] = None
 
 # Job eviction settings
 _JOB_MAX_AGE_SECS = 3600      # evict completed/failed jobs older than 1 hour
@@ -94,12 +99,19 @@ async def lifespan(app: FastAPI):
     # Enable artifacts so the viewer has images to show
     config.artifacts.enable = True
     _processor = DocumentProcessor(config)
+    global _shared_pool
+    _shared_pool = concurrent.futures.ThreadPoolExecutor(max_workers=4)
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     ARTIFACTS_BASE.mkdir(parents=True, exist_ok=True)
     OUTPUT_BASE.mkdir(parents=True, exist_ok=True)
     logger.info("DocVision Web UI ready")
     yield
     logger.info("Shutting down DocVision Web UI")
+    # Cancel all in-flight background tasks
+    for task in _background_tasks:
+        task.cancel()
+    _shared_pool.shutdown(wait=False)
+    _shared_pool = None
     _processor = None
 
 
@@ -179,7 +191,6 @@ def _auto_save_result(doc_dict: dict, original_filename: str, processing_mode: s
         logger.info(f"Auto-saved result to: {filepath}")
         
         # Also generate Markdown report
-        from docvision.io.markdown import save_markdown
         md_path = save_markdown(
             data=data,
             output_dir="markdown",
@@ -223,6 +234,10 @@ async def process_document(
     job_id = str(uuid.uuid4())[:12]
     content = await file.read()
 
+    # Enforce upload size limit
+    if len(content) > _MAX_UPLOAD_BYTES:
+        raise HTTPException(413, f"File too large ({len(content) / 1024 / 1024:.0f} MB). Max is {_MAX_UPLOAD_BYTES // 1024 // 1024} MB.")
+
     # --- Deduplicate temp uploads using content hash ---
     content_hash = hashlib.sha256(content).hexdigest()[:16]
     upload_path = UPLOAD_DIR / f"{content_hash}{suffix}"
@@ -241,7 +256,7 @@ async def process_document(
         "status": "processing",
         "filename": file.filename,
         "processing_mode": processing_mode,
-        "created": datetime.now(ZoneInfo("America/New_York")).isoformat(),
+        "created": datetime.now(timezone.utc).isoformat(),
         "_created_ts": time.time(),
         "result": None,
         "error": None,
@@ -250,8 +265,7 @@ async def process_document(
     }
 
     # Run synchronously in a thread so the event loop stays responsive
-    import concurrent.futures
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
 
     def _update_job(jid, **kwargs):
         with _jobs_lock:
@@ -287,8 +301,7 @@ async def process_document(
                         return _processor.process(str(upload_path), opts)
                 return _processor.process(str(upload_path), opts)
 
-            with concurrent.futures.ThreadPoolExecutor() as pool:
-                result = await loop.run_in_executor(pool, _do_process)
+            result = await loop.run_in_executor(_shared_pool, _do_process)
 
             # Check if cancelled while processing
             if _jobs.get(job_id, {}).get("status") == "cancelled":
@@ -319,7 +332,9 @@ async def process_document(
             logger.exception("Processing failed")
             _update_job(job_id, status="failed", error=str(exc))
 
-    asyncio.create_task(_run())
+    task = asyncio.create_task(_run())
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
     return {"job_id": job_id}
 
 
@@ -349,6 +364,10 @@ async def process_batch(
         job_id = str(uuid.uuid4())[:12]
         content = await file.read()
 
+        # Enforce upload size limit
+        if len(content) > _MAX_UPLOAD_BYTES:
+            continue  # skip oversized files
+
         content_hash = hashlib.sha256(content).hexdigest()[:16]
         upload_path = UPLOAD_DIR / f"{content_hash}{suffix}"
         if not upload_path.exists():
@@ -362,7 +381,7 @@ async def process_batch(
             "status": "queued",
             "filename": file.filename,
             "processing_mode": processing_mode,
-            "created": datetime.now(ZoneInfo("America/New_York")).isoformat(),
+            "created": datetime.now(timezone.utc).isoformat(),
             "_created_ts": time.time(),
             "result": None,
             "error": None,
@@ -372,8 +391,7 @@ async def process_batch(
         job_ids.append(job_id)
 
         # Schedule processing
-        import concurrent.futures
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         _upload_path = str(upload_path)
         _mode = processing_mode
         _dtype = document_type
@@ -407,8 +425,7 @@ async def process_batch(
                             return _processor.process(upath, opts)
                     return _processor.process(upath, opts)
 
-                with concurrent.futures.ThreadPoolExecutor() as pool:
-                    result = await loop.run_in_executor(pool, _do_process)
+                result = await loop.run_in_executor(_shared_pool, _do_process)
 
                 # Check if cancelled while processing
                 if _jobs.get(jid, {}).get("status") == "cancelled":
@@ -436,7 +453,9 @@ async def process_batch(
                 logger.exception(f"Batch processing failed for {jid}")
                 _update_job_batch(jid, status="failed", error=str(exc))
 
-        asyncio.create_task(_run_batch())
+        task = asyncio.create_task(_run_batch())
+        _background_tasks.add(task)
+        task.add_done_callback(_background_tasks.discard)
 
     return {"job_ids": job_ids, "count": len(job_ids)}
 
@@ -720,7 +739,11 @@ async def serve_artifact(job_id: str, filename: str):
     artifacts_dir = job.get("artifacts_dir")
     if not artifacts_dir:
         raise HTTPException(404)
-    fpath = Path(artifacts_dir) / filename
+    # Prevent path traversal — resolve and verify path is under artifacts_dir
+    base = Path(artifacts_dir).resolve()
+    fpath = (base / filename).resolve()
+    if not str(fpath).startswith(str(base)):
+        raise HTTPException(403, "Forbidden")
     if not fpath.is_file():
         raise HTTPException(404)
     return FileResponse(fpath, media_type="image/png")

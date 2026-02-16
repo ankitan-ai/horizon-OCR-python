@@ -89,6 +89,7 @@ class CostTracker:
 
     records: List[APICallRecord] = field(default_factory=list)
     _lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
+    max_records: int = 5000  # FIFO eviction to prevent unbounded growth
 
     # ── recording ────────────────────────────────────────────────────────
 
@@ -120,6 +121,9 @@ class CostTracker:
 
         with self._lock:
             self.records.append(record)
+            # Evict oldest records if over cap
+            if len(self.records) > self.max_records:
+                self.records = self.records[-self.max_records:]
 
         if cached:
             logger.info(
@@ -170,6 +174,8 @@ class CostTracker:
 
         with self._lock:
             self.records.append(record)
+            if len(self.records) > self.max_records:
+                self.records = self.records[-self.max_records:]
 
         total_tokens = prompt_tokens + completion_tokens
         if cached:

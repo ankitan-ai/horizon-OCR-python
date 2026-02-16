@@ -424,9 +424,12 @@ async function onOutputJobChange(jobId) {
 //  LOAD RESULT + ARTIFACTS
 // ──────────────────────────────────────────────────────────────────
 async function loadResult() {
-  const res = await fetch(`/api/jobs/${currentJobId}/result`);
-  currentResult = await res.json();
-  renderOutput();
+  try {
+    const res = await fetch(`/api/jobs/${currentJobId}/result`);
+    if (!res.ok) { console.error('Failed to load result:', res.status); return; }
+    currentResult = await res.json();
+    renderOutput();
+  } catch (e) { console.error('Error loading result:', e); }
 }
 
 async function loadArtifacts() {
@@ -514,7 +517,7 @@ function renderArtifacts(artifacts) {
       for (const a of arts) {
         const friendly = a.name.replace(/page_\d+_/, '').replace(/_/g, ' ');
         html += `<div class="artifact-card">
-          <img src="${a.url}" alt="${esc(a.name)}" onclick="showLightbox('${a.url}')" loading="lazy">
+          <img src="${escAttr(a.url)}" alt="${esc(a.name)}" onclick="showLightbox('${escAttr(a.url)}')" loading="lazy">
           <div class="label"><span>${friendly}</span><span>${a.size_kb} KB</span></div>
         </div>`;
       }
@@ -1742,5 +1745,5 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') lightbox.cla
 // ──────────────────────────────────────────────────────────────────
 //  UTILITY
 // ──────────────────────────────────────────────────────────────────
-function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-function escAttr(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/'/g,'&#39;').replace(/"/g,'&quot;'); }
+function escAttr(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/'/g,'&#39;'); }
