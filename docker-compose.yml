@@ -16,16 +16,16 @@ services:
       - ./data:/app/data:ro
       - ./output:/app/output
       - ./artifacts:/app/artifacts
+      - ./markdown:/app/markdown
       - ./.cache:/app/.cache
       - ./config.yaml:/app/config.yaml:ro
     environment:
       - DOCVISION_CONFIG=/app/config.yaml
       - LOG_LEVEL=DEBUG
-      - AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT=${AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT:-}
-      - AZURE_DOCUMENT_INTELLIGENCE_KEY=${AZURE_DOCUMENT_INTELLIGENCE_KEY:-}
+      - AZURE_DOC_INTELLIGENCE_ENDPOINT=${AZURE_DOC_INTELLIGENCE_ENDPOINT:-}
+      - AZURE_DOC_INTELLIGENCE_KEY=${AZURE_DOC_INTELLIGENCE_KEY:-}
       - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT:-}
       - AZURE_OPENAI_KEY=${AZURE_OPENAI_KEY:-}
-      - AZURE_OPENAI_DEPLOYMENT=${AZURE_OPENAI_DEPLOYMENT:-gpt-4o}
     command: >
       python -m uvicorn docvision.web.app:app 
       --host 0.0.0.0 
@@ -39,22 +39,26 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     ports:
       - "8080:8080"
     volumes:
       - ./data:/app/data:ro
       - ./output:/app/output
       - ./artifacts:/app/artifacts
+      - ./markdown:/app/markdown
       - ./.cache:/app/.cache
+      - ./config.yaml:/app/config.yaml:ro
       - docvision-models:/app/models
     environment:
       - DOCVISION_CONFIG=/app/config.yaml
       - LOG_LEVEL=INFO
-      - AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT=${AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT:-}
-      - AZURE_DOCUMENT_INTELLIGENCE_KEY=${AZURE_DOCUMENT_INTELLIGENCE_KEY:-}
+      - AZURE_DOC_INTELLIGENCE_ENDPOINT=${AZURE_DOC_INTELLIGENCE_ENDPOINT:-}
+      - AZURE_DOC_INTELLIGENCE_KEY=${AZURE_DOC_INTELLIGENCE_KEY:-}
       - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT:-}
       - AZURE_OPENAI_KEY=${AZURE_OPENAI_KEY:-}
-      - AZURE_OPENAI_DEPLOYMENT=${AZURE_OPENAI_DEPLOYMENT:-gpt-4o}
     restart: unless-stopped
     deploy:
       resources:
@@ -63,7 +67,7 @@ services:
         reservations:
           memory: 4G
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8080/health').raise_for_status()"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -80,17 +84,18 @@ services:
       - ./data:/app/data:ro
       - ./output:/app/output
       - ./artifacts:/app/artifacts
+      - ./markdown:/app/markdown
       - ./.cache:/app/.cache
+      - ./config.yaml:/app/config.yaml:ro
       - docvision-models:/app/models
     environment:
       - DOCVISION_CONFIG=/app/config.yaml
       - LOG_LEVEL=INFO
       - NVIDIA_VISIBLE_DEVICES=all
-      - AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT=${AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT:-}
-      - AZURE_DOCUMENT_INTELLIGENCE_KEY=${AZURE_DOCUMENT_INTELLIGENCE_KEY:-}
+      - AZURE_DOC_INTELLIGENCE_ENDPOINT=${AZURE_DOC_INTELLIGENCE_ENDPOINT:-}
+      - AZURE_DOC_INTELLIGENCE_KEY=${AZURE_DOC_INTELLIGENCE_KEY:-}
       - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT:-}
       - AZURE_OPENAI_KEY=${AZURE_OPENAI_KEY:-}
-      - AZURE_OPENAI_DEPLOYMENT=${AZURE_OPENAI_DEPLOYMENT:-gpt-4o}
     restart: unless-stopped
     deploy:
       resources:
@@ -113,12 +118,14 @@ services:
       - ./data:/app/data:ro
       - ./output:/app/output
       - ./artifacts:/app/artifacts
+      - ./markdown:/app/markdown
       - ./.cache:/app/.cache
+      - ./config.yaml:/app/config.yaml:ro
       - docvision-models:/app/models
     environment:
       - DOCVISION_CONFIG=/app/config.yaml
-      - AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT=${AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT:-}
-      - AZURE_DOCUMENT_INTELLIGENCE_KEY=${AZURE_DOCUMENT_INTELLIGENCE_KEY:-}
+      - AZURE_DOC_INTELLIGENCE_ENDPOINT=${AZURE_DOC_INTELLIGENCE_ENDPOINT:-}
+      - AZURE_DOC_INTELLIGENCE_KEY=${AZURE_DOC_INTELLIGENCE_KEY:-}
       - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT:-}
       - AZURE_OPENAI_KEY=${AZURE_OPENAI_KEY:-}
     command: >

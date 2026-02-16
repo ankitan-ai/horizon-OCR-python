@@ -95,6 +95,15 @@ app = create_app()
 
 
 # ---------------------------------------------------------------------------
+# Health check
+# ---------------------------------------------------------------------------
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for Docker/load balancer."""
+    return {"status": "healthy", "version": __version__}
+
+
+# ---------------------------------------------------------------------------
 # Pages
 # ---------------------------------------------------------------------------
 @app.get("/", response_class=HTMLResponse)

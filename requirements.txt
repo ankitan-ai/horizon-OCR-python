@@ -63,9 +63,9 @@ httpx>=0.24.0
 # Model downloads (optional — for downloading models from Hugging Face Hub)
 # huggingface-hub>=0.16.0
 
-# Azure AI Foundry (optional — only needed for azure/hybrid processing modes)
-# azure-ai-documentintelligence>=1.0.0b1
-# openai>=1.0.0
+# Azure AI Foundry (needed for azure/hybrid processing modes)
+azure-ai-documentintelligence>=1.0.0b1
+openai>=1.0.0
 
 # Testing (dev dependencies)
 pytest>=7.0.0
