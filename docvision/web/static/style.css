@@ -155,7 +155,8 @@ header .version{font-size:.78rem;color:var(--muted);margin-left:auto}
 .result-table th{background:var(--surface2);padding:8px 12px;text-align:left;font-weight:600;color:var(--text);font-size:.78rem;text-transform:uppercase;letter-spacing:.4px}
 .result-table td{padding:7px 12px;border-top:1px solid var(--border)}
 .result-table td input{width:100%;background:transparent;border:none;color:var(--text);font-size:.84rem;padding:2px 0;font-family:var(--font)}
-.result-table td input:focus{outline:none;border-bottom:1px solid var(--primary)}
+.result-table th input{width:100%;background:transparent;border:none;color:var(--text);font-size:.78rem;padding:2px 0;font-family:var(--font);font-weight:600;text-transform:uppercase;letter-spacing:.4px}
+.result-table td input:focus,.result-table th input:focus{outline:none;border-bottom:1px solid var(--primary)}
 
 /* ── Stats Row ─────────────────────────────────────────────────── */
 .stats{display:flex;gap:14px;flex-wrap:wrap;margin:16px 0}
