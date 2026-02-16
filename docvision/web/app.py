@@ -281,7 +281,6 @@ async def process_document(
 # ---------------------------------------------------------------------------
 # API: batch upload + process
 # ---------------------------------------------------------------------------
-from fastapi import Body
 
 
 @app.post("/api/process/batch")

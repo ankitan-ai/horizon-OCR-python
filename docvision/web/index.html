@@ -1010,7 +1010,7 @@ function renderArtifacts(artifacts) {
     // Per-page confidence summary with low-confidence line details
     if (currentResult.pages) {
       currentResult.pages.forEach((page, pi) => {
-        const pageNum = page.page_number || (pi + 1);
+        const pageNum = page.number || (pi + 1);
         const lines = page.text_lines || [];
         if (!lines.length) return;
         const lowLines = lines.filter(l => (l.confidence||0) < 0.5);
@@ -1153,7 +1153,7 @@ function renderFieldEditor() {
         </div>
         <input class="field-input" data-field-idx="${i}" value="${escAttr(f.value ?? '')}" placeholder="(empty)">
         <div class="field-meta">
-          <span>Type: ${f.field_type || 'string'}</span>
+          <span>Type: ${f.data_type || 'string'}</span>
           ${f.status ? `<span>Status: ${f.status}</span>` : ''}
           ${src}
         </div>
@@ -1198,7 +1198,7 @@ function renderFieldEditor() {
     currentResult.pages.forEach((page, pi) => {
       const lines = page.text_lines || [];
       if (!lines.length) return;
-      html += `<details style="margin-bottom:10px"><summary style="cursor:pointer;color:var(--muted);font-size:.88rem;padding:6px 0">Page ${page.page_number || pi + 1} — ${lines.length} lines</summary><div style="margin-top:6px">`;
+      html += `<details style="margin-bottom:10px"><summary style="cursor:pointer;color:var(--muted);font-size:.88rem;padding:6px 0">Page ${page.number || pi + 1} — ${lines.length} lines</summary><div style="margin-top:6px">`;
       lines.forEach(l => {
         const c = l.confidence || 0;
         html += `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:.84rem">
