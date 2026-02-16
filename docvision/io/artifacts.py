@@ -68,6 +68,16 @@ def confidence_to_color(confidence: float) -> Tuple[int, int, int]:
     return (b, g, r)  # BGR format
 
 
+def _dpi_scale(image: np.ndarray) -> float:
+    """Return a scale factor relative to a 72-DPI baseline (≈ 800 px wide).
+
+    At 500 DPI the typical width is ~4250 px → scale ≈ 5.3, so a
+    thickness-1 line becomes ~5 px, font scale 0.5 becomes ~2.6, etc.
+    """
+    w = image.shape[1]
+    return max(w / 800.0, 1.0)
+
+
 class ArtifactManager:
     """
     Manages artifact generation for document processing stages.
@@ -108,13 +118,26 @@ class ArtifactManager:
         self.save_table_structure = save_table_structure
         self._save_ocr_overlay = save_ocr_overlay
         self.save_preprocessed = save_preprocessed
+        self.current_mode: Optional[str] = None  # "local" or "azure"
         
         if enable:
             self.output_dir.mkdir(parents=True, exist_ok=True)
     
-    def get_document_dir(self, doc_id: str) -> Path:
-        """Get artifact directory for a specific document."""
-        doc_dir = self.output_dir / doc_id
+    def get_document_dir(self, doc_id: str, mode: Optional[str] = None) -> Path:
+        """Get artifact directory for a specific document.
+
+        Args:
+            doc_id: Document identifier.
+            mode: Processing mode (``"local"`` or ``"azure"``).  Falls back
+                  to ``self.current_mode`` when *None*.  When set, artifacts
+                  are stored under a ``Local/`` or ``Azure_Cloud/`` subfolder.
+        """
+        effective_mode = mode or self.current_mode
+        base = self.output_dir
+        if effective_mode:
+            subfolder = "Azure_Cloud" if effective_mode == "azure" else "Local"
+            base = base / subfolder
+        doc_dir = base / doc_id
         if self.enable:
             doc_dir.mkdir(parents=True, exist_ok=True)
         return doc_dir
@@ -170,45 +193,66 @@ class ArtifactManager:
         """
         if not self.enable or not self.save_layout:
             return None
-        
+
+        s = _dpi_scale(image)
+        border_t = max(int(2 * s), 2)
+        font_scale = 0.5 * s
+        font_t = max(int(1 * s), 1)
+        fill_alpha = 0.45  # stronger tint so regions pop
+
         overlay = image.copy()
-        
+
         for region in regions:
             color = LAYOUT_COLORS.get(region.type, LAYOUT_COLORS[LayoutRegionType.UNKNOWN])
             bbox = region.bbox
-            
-            # Draw filled rectangle with transparency
-            sub_img = overlay[int(bbox.y1):int(bbox.y2), int(bbox.x1):int(bbox.x2)]
+            y1, y2 = int(bbox.y1), int(bbox.y2)
+            x1, x2 = int(bbox.x1), int(bbox.x2)
+
+            # Clamp to image bounds
+            y1 = max(y1, 0); y2 = min(y2, overlay.shape[0])
+            x1 = max(x1, 0); x2 = min(x2, overlay.shape[1])
+            if y2 <= y1 or x2 <= x1:
+                continue
+
+            # Filled rectangle with transparency
+            sub_img = overlay[y1:y2, x1:x2]
             rect = np.full(sub_img.shape, color, dtype=np.uint8)
-            cv2.addWeighted(rect, 0.3, sub_img, 0.7, 0, sub_img)
-            
-            # Draw border
-            cv2.rectangle(
-                overlay,
-                (int(bbox.x1), int(bbox.y1)),
-                (int(bbox.x2), int(bbox.y2)),
-                color,
-                2
-            )
-            
-            # Draw label
+            cv2.addWeighted(rect, fill_alpha, sub_img, 1.0 - fill_alpha, 0, sub_img)
+
+            # Border
+            cv2.rectangle(overlay, (x1, y1), (x2, y2), color, border_t)
+
+            # Label with background
             label = f"{region.type.value} ({region.confidence:.2f})"
-            cv2.putText(
-                overlay,
-                label,
-                (int(bbox.x1), int(bbox.y1) - 5),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.5,
-                color,
-                1
-            )
-        
+            (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, font_scale, font_t)
+            label_y = max(y1 - int(5 * s), th + int(4 * s))
+            cv2.rectangle(overlay, (x1, label_y - th - int(4 * s)), (x1 + tw + int(4 * s), label_y + int(2 * s)), (0, 0, 0), -1)
+            cv2.putText(overlay, label, (x1 + int(2 * s), label_y), cv2.FONT_HERSHEY_SIMPLEX, font_scale, color, font_t)
+
+        # ── Legend strip at top ──────────────────────────────────────────
+        used_types = {r.type for r in regions}
+        if used_types:
+            legend_h = int(40 * s)
+            legend = np.full((legend_h, overlay.shape[1], 3), 30, dtype=np.uint8)
+            x_cursor = int(10 * s)
+            for lt in sorted(used_types, key=lambda t: t.value):
+                c = LAYOUT_COLORS.get(lt, (128, 128, 128))
+                box_sz = int(18 * s)
+                cy = legend_h // 2
+                cv2.rectangle(legend, (x_cursor, cy - box_sz // 2), (x_cursor + box_sz, cy + box_sz // 2), c, -1)
+                x_cursor += box_sz + int(6 * s)
+                txt = lt.value
+                cv2.putText(legend, txt, (x_cursor, cy + int(6 * s)), cv2.FONT_HERSHEY_SIMPLEX, font_scale * 0.8, (255, 255, 255), font_t)
+                (tw2, _), _ = cv2.getTextSize(txt, cv2.FONT_HERSHEY_SIMPLEX, font_scale * 0.8, font_t)
+                x_cursor += tw2 + int(20 * s)
+            overlay = np.vstack([legend, overlay])
+
         doc_dir = self.get_document_dir(doc_id)
         output_path = doc_dir / f"page_{page_num:03d}_layout.png"
-        
+
         cv2.imwrite(str(output_path), overlay)
         logger.debug(f"Saved layout artifact: {output_path}")
-        
+
         return str(output_path)
     
     def save_text_polygons_overlay(
@@ -232,25 +276,26 @@ class ArtifactManager:
         """
         if not self.enable or not self.save_text_polygons:
             return None
-        
+
+        s = _dpi_scale(image)
+        line_t = max(int(2 * s), 2)
+
         overlay = image.copy()
-        
+
         for line in text_lines:
             color = confidence_to_color(line.confidence)
-            
+
             if line.polygon and line.polygon.points:
-                # Draw polygon
                 pts = np.array(line.polygon.points, dtype=np.int32)
-                cv2.polylines(overlay, [pts], True, color, 2)
+                cv2.polylines(overlay, [pts], True, color, line_t)
             else:
-                # Draw bounding box
                 bbox = line.bbox
                 cv2.rectangle(
                     overlay,
                     (int(bbox.x1), int(bbox.y1)),
                     (int(bbox.x2), int(bbox.y2)),
                     color,
-                    2
+                    line_t
                 )
         
         doc_dir = self.get_document_dir(doc_id)
@@ -282,33 +327,38 @@ class ArtifactManager:
         """
         if not self.enable or not self.save_table_structure:
             return None
-        
+
+        s = _dpi_scale(image)
+        border_t = max(int(3 * s), 3)
+        cell_t = max(int(1 * s), 1)
+        font_scale = 0.7 * s
+        font_t = max(int(2 * s), 2)
+        cell_font_scale = 0.3 * s
+        cell_font_t = max(int(1 * s), 1)
+
         overlay = image.copy()
-        
+
         for table_idx, table in enumerate(tables):
-            # Draw table border
             bbox = table.bbox
             cv2.rectangle(
                 overlay,
                 (int(bbox.x1), int(bbox.y1)),
                 (int(bbox.x2), int(bbox.y2)),
                 (255, 255, 0),  # Cyan
-                3
+                border_t
             )
-            
-            # Draw table label
+
             label = f"Table {table_idx + 1} ({table.rows}x{table.cols})"
             cv2.putText(
                 overlay,
                 label,
-                (int(bbox.x1), int(bbox.y1) - 10),
+                (int(bbox.x1), int(bbox.y1) - int(10 * s)),
                 cv2.FONT_HERSHEY_SIMPLEX,
-                0.7,
+                font_scale,
                 (255, 255, 0),
-                2
+                font_t
             )
-            
-            # Draw cells
+
             for cell in table.cells:
                 if cell.bbox:
                     color = (0, 255, 255) if cell.is_header else (0, 200, 0)
@@ -317,19 +367,18 @@ class ArtifactManager:
                         (int(cell.bbox.x1), int(cell.bbox.y1)),
                         (int(cell.bbox.x2), int(cell.bbox.y2)),
                         color,
-                        1
+                        cell_t
                     )
-                    
-                    # Draw cell coordinates
+
                     cell_label = f"({cell.row},{cell.col})"
                     cv2.putText(
                         overlay,
                         cell_label,
-                        (int(cell.bbox.x1) + 2, int(cell.bbox.y1) + 15),
+                        (int(cell.bbox.x1) + int(2 * s), int(cell.bbox.y1) + int(15 * s)),
                         cv2.FONT_HERSHEY_SIMPLEX,
-                        0.3,
+                        cell_font_scale,
                         color,
-                        1
+                        cell_font_t
                     )
         
         doc_dir = self.get_document_dir(doc_id)
@@ -363,48 +412,49 @@ class ArtifactManager:
         """
         if not self.enable or not self._save_ocr_overlay:
             return None
-        
+
+        s = _dpi_scale(image)
+        box_t = max(int(2 * s), 2)
+        font_scale = 0.4 * s
+        font_t = max(int(1 * s), 1)
+
         overlay = image.copy()
-        
+
         for line in text_lines:
             color = confidence_to_color(line.confidence)
             bbox = line.bbox
-            
-            # Draw bounding box
+
             cv2.rectangle(
                 overlay,
                 (int(bbox.x1), int(bbox.y1)),
                 (int(bbox.x2), int(bbox.y2)),
                 color,
-                2
+                box_t
             )
-            
+
             if show_text and line.text:
-                # Draw text above box
-                # Truncate long text
                 text = line.text[:50] + "..." if len(line.text) > 50 else line.text
                 label = f"{text} ({line.confidence:.2f})"
-                
-                # Add background for readability
+
                 (text_w, text_h), _ = cv2.getTextSize(
-                    label, cv2.FONT_HERSHEY_SIMPLEX, 0.4, 1
+                    label, cv2.FONT_HERSHEY_SIMPLEX, font_scale, font_t
                 )
                 cv2.rectangle(
                     overlay,
-                    (int(bbox.x1), int(bbox.y1) - text_h - 5),
+                    (int(bbox.x1), int(bbox.y1) - text_h - int(5 * s)),
                     (int(bbox.x1) + text_w, int(bbox.y1)),
                     (255, 255, 255),
                     -1
                 )
-                
+
                 cv2.putText(
                     overlay,
                     label,
-                    (int(bbox.x1), int(bbox.y1) - 5),
+                    (int(bbox.x1), int(bbox.y1) - int(5 * s)),
                     cv2.FONT_HERSHEY_SIMPLEX,
-                    0.4,
+                    font_scale,
                     color,
-                    1
+                    font_t
                 )
         
         doc_dir = self.get_document_dir(doc_id)

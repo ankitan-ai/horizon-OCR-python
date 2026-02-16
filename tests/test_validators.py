@@ -63,6 +63,13 @@ class TestDateValidator:
             "Jan 15, 2024",
             "15 Jan 2024",
             "2024/01/15",
+            # Datetime / timestamp formats (BOL load_start/end timestamps)
+            "2025-11-20 03:09:00",
+            "2025-11-20T03:09:00",
+            "2025-11-20T03:09:00Z",
+            "2025-11-20 03:09",
+            "11/20/2025 03:09",
+            "11/20/2025 03:09:00",
         ]
         
         for date in valid_dates:
@@ -136,21 +143,34 @@ class TestRegexValidator:
     def test_invoice_number_pattern(self):
         from docvision.kie.validators import RegexValidator
         
-        # Invoice number pattern: INV-XXXX or similar
-        validator = RegexValidator(
-            pattern=r"^(INV|inv|Invoice)?[-#]?\d{3,10}$"
-        )
+        # Use the built-in invoice_number pattern (broadened to handle
+        # real-world formats like INV-2024/001, BOL-ABC-12345, #38291-A)
+        validator = RegexValidator(pattern_name="invoice_number")
         
         valid_numbers = [
             "INV-001",
             "INV-12345",
             "123456",
             "inv-999",
+            "INV-2024/001",
+            "BOL-ABC-12345",
+            "#38291-A",
+            "SO-2024.07.001",
+            "PO 12345",
         ]
         
         for num in valid_numbers:
             result = validator.validate(num)
             assert result.passed, f"Should be valid: {num}"
+        
+        # Single-character or empty values should fail
+        invalid_numbers = [
+            "",
+        ]
+        
+        for num in invalid_numbers:
+            result = validator.validate(num)
+            assert not result.passed, f"Should be invalid: {num}"
     
     @pytest.mark.unit
     def test_regex_field_name_filter(self):
@@ -264,3 +284,64 @@ class TestRunAllValidators:
         for result in results:
             assert hasattr(result, 'passed')
             assert hasattr(result, 'name')  # ValidatorResult uses 'name' not 'validator_name'
+    
+    @pytest.mark.unit
+    def test_no_invoice_regex_on_generic_number_field(self):
+        """Fields named 'reference_number' should NOT get the invoice_number regex."""
+        from docvision.kie.validators import run_all_validators
+        from docvision.types import Field
+        
+        field = Field(
+            name="reference_number",
+            value="XYZ-9876/A-2",
+            data_type="string",
+            confidence=0.9,
+        )
+        
+        results = run_all_validators(field)
+        
+        # Should only have the non_empty validator, NOT the regex validator
+        validator_names = [r.name for r in results]
+        assert "non_empty" in validator_names
+        assert "regex" not in validator_names
+    
+    @pytest.mark.unit
+    def test_invoice_regex_on_invoice_number_field(self):
+        """Fields explicitly named 'invoice_number' SHOULD get the regex."""
+        from docvision.kie.validators import run_all_validators
+        from docvision.types import Field
+        
+        field = Field(
+            name="invoice_number",
+            value="INV-2024/001",
+            data_type="string",
+            confidence=0.9,
+        )
+        
+        results = run_all_validators(field)
+        
+        validator_names = [r.name for r in results]
+        assert "regex" in validator_names
+        # The broadened pattern should accept this value
+        regex_result = next(r for r in results if r.name == "regex")
+        assert regex_result.passed, f"INV-2024/001 should match broadened pattern"
+    
+    @pytest.mark.unit
+    def test_po_number_field_gets_po_regex(self):
+        """Fields named 'po_number' should get the po_number regex."""
+        from docvision.kie.validators import run_all_validators
+        from docvision.types import Field
+        
+        field = Field(
+            name="po_number",
+            value="PO-12345",
+            data_type="string",
+            confidence=0.9,
+        )
+        
+        results = run_all_validators(field)
+        
+        validator_names = [r.name for r in results]
+        assert "regex" in validator_names
+        regex_result = next(r for r in results if r.name == "regex")
+        assert regex_result.passed

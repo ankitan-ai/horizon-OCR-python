@@ -104,7 +104,33 @@ class TableDetector:
         else:
             tables = self._detect_fallback(table_image, offset)
         
-        return tables
+        # Filter out over-detected tables (covering > 80% of image area)
+        img_h, img_w = image.shape[:2]
+        img_area = img_h * img_w
+        
+        valid_tables = []
+        for table in tables:
+            table_area = table.bbox.area
+            coverage = table_area / img_area if img_area > 0 else 0
+            
+            if coverage > 0.8:
+                logger.warning(
+                    f"Filtering over-detected table: covers {coverage*100:.1f}% of page "
+                    f"({table.rows}x{table.cols} = {len(table.cells)} cells)"
+                )
+                continue
+            
+            # Also filter tables with too many cells relative to their size
+            # (indicates false detection from text alignment)
+            if len(table.cells) > 100 and coverage > 0.5:
+                logger.warning(
+                    f"Filtering suspicious table: {len(table.cells)} cells covering {coverage*100:.1f}% of page"
+                )
+                continue
+                
+            valid_tables.append(table)
+        
+        return valid_tables
     
     def _detect_with_tatr(
         self,

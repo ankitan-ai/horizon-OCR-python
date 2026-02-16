@@ -14,6 +14,64 @@ import torch
 from loguru import logger
 
 
+class ProcessingMode:
+    """Processing mode selector."""
+    LOCAL = "local"       # All local models (YOLO, CRAFT, TrOCR, etc.)
+    AZURE = "azure"       # Azure Document Intelligence + GPT-4o (cloud)
+    HYBRID = "hybrid"     # Azure for OCR/layout, local for post-processing
+
+
+@dataclass
+class AzureConfig:
+    """Azure AI Foundry configuration for cloud-based processing."""
+    # Processing mode: "local", "azure", or "hybrid"
+    processing_mode: str = ProcessingMode.LOCAL
+
+    # Azure Document Intelligence (replaces YOLO + CRAFT + TrOCR + TATR + Tesseract)
+    doc_intelligence_endpoint: str = ""  # e.g. https://xxx.cognitiveservices.azure.com/
+    doc_intelligence_key: str = ""        # API key (prefer env var AZURE_DOC_INTELLIGENCE_KEY)
+    doc_intelligence_model: str = "prebuilt-layout"  # prebuilt-layout, prebuilt-read, prebuilt-invoice
+
+    # Azure OpenAI / GPT Vision (replaces Donut + LayoutLMv3 KIE)
+    openai_endpoint: str = ""             # e.g. https://xxx.openai.azure.com/
+    openai_key: str = ""                  # API key (prefer env var AZURE_OPENAI_KEY)
+    openai_deployment: str = "gpt-4o-mini"  # gpt-5.2, gpt-5-nano, gpt-5-mini, gpt-4o-mini, gpt-4.1-mini
+    openai_api_version: str = "2024-12-01-preview"  # Azure OpenAI API version
+    use_gpt_vision_kie: bool = True       # Whether to use GPT-4o for field extraction
+
+    # GPT-4o structured extraction settings
+    gpt_max_tokens: int = 16384
+    gpt_temperature: float = 0.0          # Deterministic for extraction
+    document_type: str = "auto"           # auto, bol, invoice, receipt, delivery_ticket
+
+    def __post_init__(self):
+        """Load keys from environment variables if not set in config."""
+        import os
+        try:
+            from dotenv import load_dotenv
+            load_dotenv()  # Load .env file if present
+        except ImportError:
+            pass  # python-dotenv not installed — rely on real env vars
+        if not self.doc_intelligence_key:
+            self.doc_intelligence_key = os.environ.get("AZURE_DOC_INTELLIGENCE_KEY", "")
+        if not self.openai_key:
+            self.openai_key = os.environ.get("AZURE_OPENAI_KEY", "")
+        if not self.doc_intelligence_endpoint:
+            self.doc_intelligence_endpoint = os.environ.get("AZURE_DOC_INTELLIGENCE_ENDPOINT", "")
+        if not self.openai_endpoint:
+            self.openai_endpoint = os.environ.get("AZURE_OPENAI_ENDPOINT", "")
+
+    @property
+    def is_azure_ready(self) -> bool:
+        """Check if Azure Document Intelligence is configured."""
+        return bool(self.doc_intelligence_endpoint and self.doc_intelligence_key)
+
+    @property
+    def is_openai_ready(self) -> bool:
+        """Check if Azure OpenAI is configured."""
+        return bool(self.openai_endpoint and self.openai_key and self.openai_deployment)
+
+
 @dataclass
 class RuntimeConfig:
     """Runtime configuration settings."""
@@ -41,7 +99,7 @@ class RuntimeConfig:
 @dataclass
 class PDFConfig:
     """PDF processing configuration."""
-    dpi: int = 350  # Rasterization DPI (300-400 recommended for accuracy)
+    dpi: int = 600  # Rasterization DPI (high for maximum accuracy)
     max_pages: Optional[int] = None  # None means process all pages
 
 
@@ -73,8 +131,8 @@ class ModelsConfig:
     trocr_handwritten: str = "models/trocr-base-handwritten"
     
     # KIE models
-    donut: str = "naver-clova-ix/donut-base-finetuned-cord-v2"
-    layoutlmv3: str = "microsoft/layoutlmv3-base"
+    donut: str = "models/invoice-and-receipts-donut-v1"
+    layoutlmv3: str = "models/layoutlmv3-base"
 
 
 @dataclass
@@ -96,7 +154,7 @@ class ThresholdsConfig:
     # OCR confidence thresholds
     trocr_min_conf: float = 0.75
     tesseract_min_conf: float = 0.70
-    reroute_to_tesseract_below: float = 0.80
+    reroute_to_tesseract_below: float = 0.60
     
     # Handwriting detection threshold
     handwriting_detection_conf: float = 0.6
@@ -140,6 +198,44 @@ class OutputConfig:
 
 
 @dataclass
+class MarkdownConfig:
+    """Markdown report generation configuration."""
+    enable: bool = True
+    dir: str = "markdown"
+
+
+@dataclass
+class SmartRoutingConfig:
+    """Smart document classification and model routing."""
+    enable: bool = True                     # Enable smart classifier before extraction
+    classifier_deployment: str = "gpt-5-nano"  # Cheap model used only for classification
+    default_gpt_deployment: str = "gpt-4o-mini"  # Default extraction model
+    classify_on_auto_only: bool = True      # Only classify when document_type == "auto"
+
+
+@dataclass
+class ReOCRConfig:
+    """Targeted re-OCR configuration for low-confidence regions."""
+    enable: bool = True                     # Enable targeted re-OCR
+    confidence_threshold: float = 0.70      # Re-process lines below this confidence
+    improvement_threshold: float = 0.05     # Minimum improvement to accept new result
+    strategy: str = "ensemble"              # ensemble, trocr_only, tesseract, sequential
+    max_lines_per_page: int = 50            # Max lines to re-process per page
+    
+    # Enhanced preprocessing settings
+    scale_factor: float = 2.0               # Upscale crop before OCR
+    enhanced_denoise: int = 15              # Stronger denoising (default: 10)
+    enhanced_clahe: float = 3.0             # Stronger CLAHE (default: 2.0)
+    enhanced_sharpen: float = 2.0           # Stronger sharpening (default: 1.5)
+    apply_binarization: bool = True         # Apply adaptive binarization
+    apply_morphology: bool = True           # Apply morphological cleanup
+    
+    # Azure re-OCR (optional, adds API cost)
+    azure_retry_enabled: bool = False       # Re-send very low confidence regions to Azure
+    azure_retry_threshold: float = 0.50     # Threshold for Azure retry (lower = more selective)
+
+
+@dataclass
 class Config:
     """Main configuration container."""
     runtime: RuntimeConfig = field(default_factory=RuntimeConfig)
@@ -151,6 +247,10 @@ class Config:
     validators: ValidatorsConfig = field(default_factory=ValidatorsConfig)
     artifacts: ArtifactsConfig = field(default_factory=ArtifactsConfig)
     output: OutputConfig = field(default_factory=OutputConfig)
+    markdown: MarkdownConfig = field(default_factory=MarkdownConfig)
+    azure: AzureConfig = field(default_factory=AzureConfig)
+    smart_routing: SmartRoutingConfig = field(default_factory=SmartRoutingConfig)
+    reocr: ReOCRConfig = field(default_factory=ReOCRConfig)
     
     @classmethod
     def from_dict(cls, data: dict) -> "Config":
@@ -175,6 +275,14 @@ class Config:
             config.artifacts = ArtifactsConfig(**data["artifacts"])
         if "output" in data:
             config.output = OutputConfig(**data["output"])
+        if "markdown" in data:
+            config.markdown = MarkdownConfig(**data["markdown"])
+        if "azure" in data:
+            config.azure = AzureConfig(**data["azure"])
+        if "smart_routing" in data:
+            config.smart_routing = SmartRoutingConfig(**data["smart_routing"])
+        if "reocr" in data:
+            config.reocr = ReOCRConfig(**data["reocr"])
         
         return config
 

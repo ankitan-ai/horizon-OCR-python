@@ -102,7 +102,73 @@ class RankAndFuse:
             if fused:
                 fused_fields.append(fused)
         
+        # Post-fusion quality filter: drop empty and ultra-low-confidence fields
+        fused_fields = self._filter_low_quality_fields(fused_fields)
+        
         return fused_fields
+    
+    def _filter_low_quality_fields(self, fields: List[Field]) -> List[Field]:
+        """
+        Remove fields that add no value to the output.
+        
+        Filters out:
+        - Fields with empty / whitespace-only values
+        - Single-source fields below a low confidence threshold (e.g. un-fine-tuned
+          model guesses) unless they carry genuine textual content
+        """
+        kept: List[Field] = []
+        
+        for field in fields:
+            value_str = str(field.value).strip() if field.value is not None else ""
+            
+            # ── 1. Drop entirely empty fields ──
+            if not value_str:
+                logger.debug(
+                    f"Fuser filter: dropping empty field '{field.name}' "
+                    f"(source={field.chosen_source})"
+                )
+                continue
+            
+            # ── 2. Drop ultra-low-confidence single-source fields ──
+            #    These come from un-fine-tuned models (e.g. LayoutLMv3 at ~6%)
+            #    that assign near-random labels.  Threshold: 15 %
+            LOW_CONF_THRESHOLD = 0.15
+            num_sources = len({c.source for c in field.candidates})
+            if (
+                num_sources <= 1
+                and field.confidence < LOW_CONF_THRESHOLD
+            ):
+                logger.debug(
+                    f"Fuser filter: dropping low-confidence field '{field.name}' "
+                    f"(conf={field.confidence:.3f}, source={field.chosen_source})"
+                )
+                continue
+            
+            # ── 3. Drop data-type mismatches (model hallucinations) ──
+            #    e.g. currency field with value "BATTERY RADIATOR"
+            if field.data_type == "currency" and not _looks_like_amount(value_str):
+                logger.debug(
+                    f"Fuser filter: dropping currency-mismatch field '{field.name}' "
+                    f"(value='{value_str}', source={field.chosen_source})"
+                )
+                continue
+            
+            if field.data_type == "date" and not _looks_like_date_value(value_str):
+                logger.debug(
+                    f"Fuser filter: dropping date-mismatch field '{field.name}' "
+                    f"(value='{value_str}', source={field.chosen_source})"
+                )
+                continue
+            
+            kept.append(field)
+        
+        dropped = len(fields) - len(kept)
+        if dropped:
+            logger.info(
+                f"Fuser quality filter: kept {len(kept)} fields, dropped {dropped}"
+            )
+        
+        return kept
     
     def _normalize_field_name(self, name: str) -> str:
         """Normalize field name for matching."""
@@ -408,3 +474,34 @@ def _boxes_overlap(box1: BoundingBox, box2: BoundingBox, threshold: float = 0.3)
     overlap_ratio = intersection / min(area1, area2) if min(area1, area2) > 0 else 0
     
     return overlap_ratio >= threshold
+
+
+# ── Quality-filter helpers ───────────────────────────────────────────
+
+import re as _re
+
+
+def _looks_like_amount(value: str) -> bool:
+    """Return True if *value* could plausibly be a monetary amount."""
+    # Strip common currency symbols and whitespace
+    cleaned = _re.sub(r'[$€£¥,\s]', '', value)
+    # Must contain at least one digit
+    if not _re.search(r'\d', cleaned):
+        return False
+    # Allow optional sign, digits, optional decimal part
+    return bool(_re.match(r'^[+-]?\d+\.?\d*$', cleaned))
+
+
+def _looks_like_date_value(value: str) -> bool:
+    """Return True if *value* could plausibly be a date string."""
+    # Must contain at least one digit
+    if not _re.search(r'\d', value):
+        return False
+    # Common date patterns
+    patterns = [
+        r'\d{4}[-/]\d{1,2}[-/]\d{1,2}',   # 2024-01-15
+        r'\d{1,2}[-/]\d{1,2}[-/]\d{2,4}',  # 01/15/2024 or 1-15-24
+        r'\w+\s+\d{1,2},?\s+\d{4}',        # January 15, 2024
+        r'\d{1,2}\s+\w+\s+\d{4}',          # 15 January 2024
+    ]
+    return any(_re.search(p, value) for p in patterns)

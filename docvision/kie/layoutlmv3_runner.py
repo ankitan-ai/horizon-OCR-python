@@ -183,6 +183,10 @@ class LayoutLMv3Runner:
             padding="max_length"
         )
         
+        # Extract word_ids before converting to plain dict (which loses
+        # the BatchEncoding.word_ids() method).
+        word_ids = encoding.word_ids(0)
+        
         # Move to device
         encoding = {k: v.to(self.device) for k, v in encoding.items()}
         
@@ -201,8 +205,6 @@ class LayoutLMv3Runner:
         prob_array = probabilities[0].cpu().numpy()
         
         # Map back to original words (handling tokenization)
-        word_ids = encoding.word_ids(0)
-        
         current_word_idx = -1
         for i, word_idx in enumerate(word_ids):
             if word_idx is None:

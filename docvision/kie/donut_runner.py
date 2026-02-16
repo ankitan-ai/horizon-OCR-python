@@ -2,8 +2,8 @@
 Donut (OCR-free) document understanding model.
 
 Donut directly predicts structured JSON from document images
-without requiring separate OCR. Strong for end-to-end parsing
-of forms, receipts, and invoices.
+without requiring separate OCR. Fine-tuned on invoices and receipts
+for end-to-end parsing with header, line-item, and summary extraction.
 """
 
 from typing import Dict, Any, Optional, List, Tuple
@@ -46,9 +46,9 @@ class DonutRunner:
     
     def __init__(
         self,
-        model_name: str = "naver-clova-ix/donut-base-finetuned-cord-v2",
+        model_name: str = "models/invoice-and-receipts-donut-v1",
         device: str = "cpu",
-        max_length: int = 512
+        max_length: int = 768
     ):
         """
         Initialize Donut runner.
@@ -82,17 +82,30 @@ class DonutRunner:
         except Exception as e:
             logger.error(f"Failed to load Donut model: {e}")
     
+    def _detect_task_prompt(self) -> str:
+        """Auto-detect the correct task prompt from the model's tokenizer."""
+        try:
+            # Check for common task tokens in the tokenizer vocabulary
+            for prompt in ["<s_receipt>", "<s_cord-v2>", "<s_header>", "<s>"]:
+                token_id = self.processor.tokenizer.convert_tokens_to_ids(prompt)
+                if token_id != self.processor.tokenizer.unk_token_id:
+                    logger.info(f"Auto-detected task prompt: {prompt}")
+                    return prompt
+        except Exception:
+            pass
+        return "<s>"
+
     def extract(
         self,
         image: np.ndarray,
-        task_prompt: str = "<s_cord-v2>"
+        task_prompt: Optional[str] = None
     ) -> Tuple[Dict[str, Any], float]:
         """
         Extract structured information from document image.
         
         Args:
             image: Document image (BGR format)
-            task_prompt: Task-specific prompt for the model
+            task_prompt: Task-specific prompt for the model (auto-detected if None)
             
         Returns:
             Tuple of (extracted_data dict, overall confidence)
@@ -100,6 +113,9 @@ class DonutRunner:
         if not self.model_loaded:
             logger.warning("Donut not loaded, returning empty result")
             return {}, 0.0
+        
+        if task_prompt is None:
+            task_prompt = self._detect_task_prompt()
         
         # Convert BGR to RGB
         if CV2_AVAILABLE and len(image.shape) == 3:
@@ -164,8 +180,9 @@ class DonutRunner:
         """
         Parse Donut output into structured dictionary.
         
-        Handles various output formats including JSON-like structures
-        and key-value patterns.
+        Handles various output formats including JSON-like structures,
+        XML-like tag structures (with <sep/> delimited lists), and
+        key-value patterns.
         """
         # Try to extract JSON
         try:
@@ -186,12 +203,23 @@ class DonutRunner:
             
             # Handle nested structures
             if '<' in value:
-                # Recursively parse nested tags
-                nested = self._parse_output(value)
-                if nested:
-                    result[key] = nested
+                # Check for <sep/> delimited lists (e.g., line items)
+                if '<sep/>' in value:
+                    items = []
+                    for segment in value.split('<sep/>'):
+                        segment = segment.strip()
+                        if segment:
+                            nested = self._parse_output(segment)
+                            if nested:
+                                items.append(nested)
+                    result[key] = items if items else value
                 else:
-                    result[key] = value
+                    # Recursively parse nested tags
+                    nested = self._parse_output(value)
+                    if nested:
+                        result[key] = nested
+                    else:
+                        result[key] = value
             else:
                 result[key] = value
         
@@ -211,7 +239,7 @@ class DonutRunner:
         self,
         image: np.ndarray,
         page_num: int = 1,
-        task_prompt: str = "<s_cord-v2>"
+        task_prompt: Optional[str] = None
     ) -> List[Field]:
         """
         Extract and convert to Field objects.
@@ -341,10 +369,11 @@ class DonutRunner:
         
         Different Donut models support different task prompts.
         """
-        # Common task prompts for different fine-tuned models
+        # Task prompts for the invoice-and-receipts model
         return [
-            "<s_cord-v2>",  # CORD (receipt parsing)
-            "<s_docvqa>",  # Document VQA
-            "<s_synthdog>",  # Synthetic document generation
-            "<s>",  # Generic
+            "<s_receipt>",  # Invoice & receipt parsing (primary)
+            "<s_header>",  # Header extraction only
+            "<s_items>",   # Line items extraction only
+            "<s_cord-v2>",  # CORD format (legacy/fallback)
+            "<s>",          # Generic
         ]

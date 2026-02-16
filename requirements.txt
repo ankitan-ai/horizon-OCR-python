@@ -33,10 +33,16 @@ PyYAML>=6.0
 # Logging
 loguru>=0.7.0
 
+# Timezone data (required on Windows for zoneinfo)
+tzdata>=2024.1
+
 # Utilities
 numpy>=1.24.0,<2.0.0
 scipy>=1.11.0
 tqdm>=4.65.0
+
+# SSL / Certificate Handling
+certifi>=2023.7.22
 
 # OCR Backup (optional, requires system Tesseract binary)
 pytesseract>=0.3.10
@@ -44,10 +50,23 @@ pytesseract>=0.3.10
 # YOLO for Layout Detection
 ultralytics>=8.0.0
 
-# Testing (dev dependency)
-pytest>=7.0.0
-pytest-cov>=4.0.0
+# HTTP Client
+requests>=2.31.0
 httpx>=0.24.0
 
-# HTTP Client (for health checks)
-requests>=2.31.0
+# PDF Page Preview (optional — falls back to PyMuPDF if unavailable)
+# pdf2image>=1.16.0  # requires poppler system binary
+
+# Environment variables (optional — loads .env files for Azure credentials)
+# python-dotenv>=1.0.0
+
+# Model downloads (optional — for downloading models from Hugging Face Hub)
+# huggingface-hub>=0.16.0
+
+# Azure AI Foundry (needed for azure/hybrid processing modes)
+azure-ai-documentintelligence>=1.0.0b1
+openai>=1.0.0
+
+# Testing (dev dependencies)
+pytest>=7.0.0
+pytest-cov>=4.0.0

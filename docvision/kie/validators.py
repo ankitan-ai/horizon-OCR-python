@@ -189,6 +189,16 @@ class DateValidator(Validator):
             formats: List of accepted date formats
         """
         self.formats = formats or [
+            # ── Date + time (most specific first) ───────────────
+            "%Y-%m-%d %H:%M:%S",
+            "%Y-%m-%dT%H:%M:%S",
+            "%Y-%m-%dT%H:%M:%SZ",
+            "%Y-%m-%d %H:%M",
+            "%m/%d/%Y %H:%M:%S",
+            "%m/%d/%Y %H:%M",
+            "%d/%m/%Y %H:%M:%S",
+            "%d/%m/%Y %H:%M",
+            # ── Date only ───────────────────────────────────────
             "%Y-%m-%d",
             "%d/%m/%Y",
             "%m/%d/%Y",
@@ -339,10 +349,11 @@ class RegexValidator(Validator):
     
     name = "regex"
     
-    # Common patterns
+    # Common patterns — kept intentionally broad to avoid false negatives
+    # on real-world documents (e.g. INV-2024/001, BOL-ABC-12345, #38291-A)
     PATTERNS = {
-        "invoice_number": r'^[A-Z]{0,3}[-]?\d{4,12}$',
-        "po_number": r'^PO[-]?\d{4,10}$',
+        "invoice_number": r'^[A-Za-z0-9#][\w\-/.# ]{1,40}$',
+        "po_number": r'^[A-Za-z0-9#][\w\-/.# ]{1,30}$',
         "email": r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
         "phone": r'^[\+]?[\d\s\-\(\)]{7,20}$',
         "zip_code": r'^\d{5}(-\d{4})?$',
@@ -453,10 +464,13 @@ def run_all_validators(
         elif field.data_type == "currency":
             validators.append(AmountValidator())
         elif field.data_type == "string":
-            # Check if it looks like a known pattern
+            # Check if it looks like a known pattern — be specific to
+            # avoid false-matching fields like "phone_number", "reference_number"
             name_lower = field.name.lower()
-            if "invoice" in name_lower or "number" in name_lower:
+            if "invoice" in name_lower and "number" in name_lower:
                 validators.append(RegexValidator(pattern_name="invoice_number"))
+            elif name_lower.startswith("po") and "number" in name_lower:
+                validators.append(RegexValidator(pattern_name="po_number"))
             elif "email" in name_lower:
                 validators.append(RegexValidator(pattern_name="email"))
             elif "phone" in name_lower:

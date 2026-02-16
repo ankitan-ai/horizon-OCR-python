@@ -6,7 +6,7 @@ runtime:
   workers: 0            # 0 = auto-detect CPU count
 
 pdf:
-  dpi: 350              # Rasterization DPI (300-400 for accuracy)
+  dpi: 600              # Rasterization DPI (high for maximum accuracy)
   max_pages: null       # null = process all pages
 
 preprocess:
@@ -32,8 +32,8 @@ models:
   trocr_handwritten: models/trocr-base-handwritten
   
   # KIE models
-  donut: naver-clova-ix/donut-base-finetuned-cord-v2
-  layoutlmv3: microsoft/layoutlmv3-base
+  donut: models/invoice-and-receipts-donut-v1
+  layoutlmv3: models/layoutlmv3-base
 
 kie:
   use_donut: true
@@ -48,7 +48,7 @@ kie:
 thresholds:
   trocr_min_conf: 0.75
   tesseract_min_conf: 0.70
-  reroute_to_tesseract_below: 0.80
+  reroute_to_tesseract_below: 0.60
   handwriting_detection_conf: 0.6
   low_confidence_threshold: 0.5
   min_confidence_for_output: 0.2
@@ -71,6 +71,8 @@ validators:
     - "%d-%m-%Y"
     - "%B %d, %Y"
     - "%b %d, %Y"
+    - "%d %B %Y"
+    - "%d %b %Y"
 
 artifacts:
   enable: true
@@ -86,3 +88,56 @@ output:
   include_all_candidates: true
   include_page_images: false
   pretty_json: true
+
+# ─── Azure AI Foundry (Cloud API) ───────────────────────────────────────────
+# Set processing_mode to "azure" or "hybrid" to use cloud APIs instead of
+# (or alongside) local models.  Keys can also be set via environment variables:
+#   AZURE_DOC_INTELLIGENCE_ENDPOINT, AZURE_DOC_INTELLIGENCE_KEY,
+#   AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_KEY
+azure:
+  processing_mode: local        # local | azure | hybrid
+
+  # Azure Document Intelligence (replaces YOLO + CRAFT + TrOCR + TATR + Tesseract)
+  doc_intelligence_endpoint: ""  # https://<resource>.cognitiveservices.azure.com/
+  doc_intelligence_key: ""       # or set AZURE_DOC_INTELLIGENCE_KEY env var
+  doc_intelligence_model: prebuilt-layout  # prebuilt-layout | prebuilt-read | prebuilt-invoice
+
+  # Azure OpenAI / GPT-4o Vision (replaces Donut + LayoutLMv3 KIE)
+  openai_endpoint: ""            # https://<resource>.openai.azure.com/
+  openai_key: ""                 # or set AZURE_OPENAI_KEY env var
+  openai_deployment: gpt-4o-mini  # your deployment name
+  openai_api_version: "2024-12-01-preview"
+  use_gpt_vision_kie: true       # use GPT-4o for key information extraction
+
+  # Extraction settings
+  gpt_max_tokens: 16384
+  gpt_temperature: 0.0           # deterministic for extraction tasks
+  document_type: auto             # auto | bol | invoice | receipt | delivery_ticket
+
+# ─── Markdown Reports ────────────────────────────────────────────────────────
+markdown:
+  enable: true
+  dir: markdown
+
+# ─── Smart Routing (Document Classification) ────────────────────────────────
+smart_routing:
+  enable: true
+  classifier_deployment: gpt-5-nano    # Cheap model for classification only
+  default_gpt_deployment: gpt-4o-mini  # Default extraction model
+  classify_on_auto_only: true          # Only classify when document_type == "auto"
+
+# ─── Targeted Re-OCR ────────────────────────────────────────────────────────
+reocr:
+  enable: true
+  confidence_threshold: 0.70           # Re-process lines below this confidence
+  improvement_threshold: 0.05          # Minimum improvement to accept new result
+  strategy: ensemble                   # ensemble | trocr_only | tesseract | sequential
+  max_lines_per_page: 50
+  scale_factor: 2.0
+  enhanced_denoise: 15
+  enhanced_clahe: 3.0
+  enhanced_sharpen: 2.0
+  apply_binarization: true
+  apply_morphology: true
+  azure_retry_enabled: false
+  azure_retry_threshold: 0.50

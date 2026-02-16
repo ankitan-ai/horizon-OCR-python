@@ -13,7 +13,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     # OpenCV dependencies
-    libgl1-mesa-glx \
+    libgl1 \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
@@ -27,6 +27,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # Build essentials for some Python packages
     gcc \
     g++ \
+    # Privilege drop in entrypoint
+    gosu \
     # Cleanup
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
@@ -40,7 +42,10 @@ WORKDIR /app
 # Copy requirements first for caching
 COPY requirements.txt .
 
-# Install Python dependencies
+# Install CPU-only PyTorch first (avoids downloading ~4GB of NVIDIA CUDA libs)
+RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
+
+# Install remaining Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
@@ -49,12 +54,19 @@ COPY . .
 # Install the package
 RUN pip install --no-cache-dir -e .
 
-# Create directories for models, output, artifacts
-RUN mkdir -p /app/models /app/output /app/artifacts \
+# Copy example config as default (can be overridden by volume mount)
+RUN cp config.example.yaml config.yaml
+
+# Create directories for models, output, artifacts, cache, markdown
+RUN mkdir -p /app/models /app/output /app/artifacts /app/.cache /app/markdown \
     && chown -R docvision:docvision /app
 
-# Switch to non-root user
-USER docvision
+# Copy entrypoint script (resolves Azure DNS via DoH to bypass VPN issues)
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+# NOTE: Container starts as root; entrypoint drops to docvision user via gosu
+# after resolving Azure DNS hostnames via DNS-over-HTTPS
 
 # Download models during build (optional, can be done at runtime)
 # Uncomment to pre-download models:
@@ -62,15 +74,18 @@ USER docvision
 #     AutoProcessor.from_pretrained('microsoft/trocr-base-printed'); \
 #     AutoProcessor.from_pretrained('microsoft/trocr-base-handwritten')"
 
-# Expose API port
-EXPOSE 8000
+# Expose web UI port
+EXPOSE 8080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:8000/health').raise_for_status()" || exit 1
+    CMD python -c "import requests; requests.get('http://localhost:8080/health').raise_for_status()" || exit 1
 
-# Default command - run API server
-CMD ["python", "-m", "docvision.api.server"]
+# Entrypoint resolves Azure DNS via DoH then drops to docvision user
+ENTRYPOINT ["docker-entrypoint.sh"]
+
+# Default command - run web server
+CMD ["python", "-m", "uvicorn", "docvision.web.app:app", "--host", "0.0.0.0", "--port", "8080"]
 
 # Alternative commands:
 # CLI processing: docker run docvision docvision process /data/doc.pdf

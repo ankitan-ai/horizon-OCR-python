@@ -187,3 +187,100 @@ class TestArtifactManager:
         )
         
         assert path is not None
+
+    # --- Mode-subfolder tests ---
+
+    @pytest.mark.unit
+    def test_get_document_dir_local_mode(self, temp_dir):
+        from docvision.io.artifacts import ArtifactManager
+
+        manager = ArtifactManager(output_dir=str(temp_dir), enable=True)
+        manager.current_mode = "local"
+
+        doc_dir = manager.get_document_dir("abc123")
+        assert doc_dir == temp_dir / "Local" / "abc123"
+        assert doc_dir.exists()
+
+    @pytest.mark.unit
+    def test_get_document_dir_azure_mode(self, temp_dir):
+        from docvision.io.artifacts import ArtifactManager
+
+        manager = ArtifactManager(output_dir=str(temp_dir), enable=True)
+        manager.current_mode = "azure"
+
+        doc_dir = manager.get_document_dir("abc123")
+        assert doc_dir == temp_dir / "Azure_Cloud" / "abc123"
+        assert doc_dir.exists()
+
+    @pytest.mark.unit
+    def test_get_document_dir_no_mode(self, temp_dir):
+        from docvision.io.artifacts import ArtifactManager
+
+        manager = ArtifactManager(output_dir=str(temp_dir), enable=True)
+        # current_mode left as None — should fall back to flat layout
+        doc_dir = manager.get_document_dir("abc123")
+        assert doc_dir == temp_dir / "abc123"
+
+    @pytest.mark.unit
+    def test_explicit_mode_overrides_current_mode(self, temp_dir):
+        from docvision.io.artifacts import ArtifactManager
+
+        manager = ArtifactManager(output_dir=str(temp_dir), enable=True)
+        manager.current_mode = "local"
+
+        doc_dir = manager.get_document_dir("abc123", mode="azure")
+        assert doc_dir == temp_dir / "Azure_Cloud" / "abc123"
+
+    @pytest.mark.unit
+    def test_save_preprocessed_with_mode(self, temp_dir, sample_image):
+        from docvision.io.artifacts import ArtifactManager
+
+        manager = ArtifactManager(
+            output_dir=str(temp_dir),
+            enable=True,
+            save_preprocessed=True,
+        )
+        manager.current_mode = "azure"
+
+        path = manager.save_preprocessed_image(
+            sample_image,
+            doc_id="test-mode",
+            page_num=1,
+            stage="enhanced",
+        )
+
+        assert path is not None
+        assert "Azure_Cloud" in path
+
+
+# ---------------------------------------------------------------------------
+# Upload deduplication
+# ---------------------------------------------------------------------------
+class TestUploadDedup:
+    """Tests for content-hash–based upload deduplication."""
+
+    @pytest.mark.unit
+    def test_same_content_produces_same_hash_filename(self, tmp_path):
+        import hashlib
+
+        content = b"hello world document bytes"
+        h = hashlib.sha256(content).hexdigest()[:16]
+
+        path_a = tmp_path / f"{h}.pdf"
+        path_a.write_bytes(content)
+
+        # Second write should hit the same filename
+        path_b = tmp_path / f"{h}.pdf"
+        assert path_a == path_b
+        assert path_b.exists()
+
+    @pytest.mark.unit
+    def test_different_content_produces_different_filenames(self, tmp_path):
+        import hashlib
+
+        c1 = b"document one"
+        c2 = b"document two"
+        h1 = hashlib.sha256(c1).hexdigest()[:16]
+        h2 = hashlib.sha256(c2).hexdigest()[:16]
+
+        assert h1 != h2

@@ -12,7 +12,8 @@ This document describes the JSON output schema for DocVision document processing
   "pages": [ ... ],
   "tables": [ ... ],
   "fields": [ ... ],
-  "validation": { ... }
+  "validation": { ... },
+  "normalized": { ... }
 }
 ```
 
@@ -27,6 +28,7 @@ This document describes the JSON output schema for DocVision document processing
 | `tables` | Table[] | All tables extracted from document |
 | `fields` | Field[] | All extracted key-value fields |
 | `validation` | ValidationResult | Overall validation summary |
+| `normalized` | Normalized | Business-ready structured view (optional, Azure mode) |
 
 ## DocumentMetadata
 
@@ -355,6 +357,43 @@ if validators_run:
         status = "validation_failed"
 ```
 
+## Normalized (Business-Ready View)
+
+This optional object provides a structured, application-friendly view of the document content,
+while preserving raw `fields[]` and `tables[]` for audit and fusion.
+
+```json
+"normalized": {
+  "document_type": "bol|invoice|receipt|delivery_ticket|auto",
+  "header": { "... header-level fields only ..." },
+  "line_items": [
+    {
+      "... row-level fields only ...",
+      "_evidence": {
+        "table_id": "table-001",
+        "cell_refs": [ {"row": 3, "col": 0}, {"row": 3, "col": 2} ],
+        "page": 1
+      }
+    }
+  ],
+  "totals": {
+    "subtotal": "...",
+    "tax_amount": "...",
+    "total_amount": "...",
+    "gross_gallons": "...",
+    "net_gallons": "..."
+  },
+  "line_items_secondary": [ { "... optional secondary table rows ..." } ]
+}
+```
+
+### Rules
+
+- Never mix header fields with line-item fields.
+- All table-like content should be represented as `line_items[]`
+  (and `line_items_secondary[]` if a second table exists).
+- Values should be strings, except arrays for line items.
+
 ## Source Engine Values
 
 | Value | Description |
@@ -363,4 +402,5 @@ if validators_run:
 | `layoutlmv3` | LayoutLMv3 token-based KIE |
 | `trocr` | TrOCR text recognition |
 | `tesseract` | Tesseract OCR backup |
+| `gpt_vision` | Azure OpenAI GPT Vision KIE (structured extraction) |
 | `fusion` | Rank-and-fuse combined result |
