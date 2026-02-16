@@ -2,8 +2,6 @@
 # ========================
 # Development and production configurations
 
-version: '3.8'
-
 services:
   # Development server (CPU)
   docvision-dev:
@@ -66,8 +64,13 @@ services:
           memory: 8G
         reservations:
           memory: 4G
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
     healthcheck:
-      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8080/health').raise_for_status()"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3

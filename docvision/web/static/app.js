@@ -127,7 +127,10 @@ function removeFile(idx) {
 // ──────────────────────────────────────────────────────────────────
 //  PDF / IMAGE PREVIEW
 // ──────────────────────────────────────────────────────────────────
+let _previewObjectURL = null;
+
 async function generatePreview(f) {
+  if (_previewObjectURL) { URL.revokeObjectURL(_previewObjectURL); _previewObjectURL = null; }
   const area   = $('#previewArea');
   const sizeMB = (f.size / 1024 / 1024).toFixed(2);
   const ext    = f.name.split('.').pop().toUpperCase();
@@ -143,6 +146,7 @@ async function generatePreview(f) {
   if (['JPG','JPEG','PNG','BMP','WEBP'].includes(ext)) {
     try {
       const url = URL.createObjectURL(f);
+      _previewObjectURL = url;
       const thumb = document.createElement('img');
       thumb.src = url;
       thumb.className = 'preview-thumb';
@@ -1095,18 +1099,6 @@ function renderSpatialTextOverlay(pageData, container) {
   // Use text_lines for BOTH display AND counting (same source as artifacts tab)
   const textLines = [];
   
-  // Debug: log low confidence items
-  const lowConfDebug = artifactLines.filter(l => (l.confidence || 0) < 0.5);
-  console.log('Low confidence items from text_lines:', lowConfDebug.map(l => ({
-    text: l.text,
-    confidence: l.confidence,
-    hasBbox: !!l.bbox,
-    bbox: l.bbox
-  })));
-  
-  // Debug page dimensions
-  console.log('Page dimensions:', { pageWidth, pageHeight, displayWidth, scale });
-  
   artifactLines.forEach((line) => {
     if (!line || !line.text) return;
     const text = line.text.trim();
@@ -1131,10 +1123,6 @@ function renderSpatialTextOverlay(pageData, container) {
   const highCount = textLines.length - lowCount - medCount;
   const totalLines = textLines.length;
   
-  // Debug: log what will be rendered
-  const lowWithBbox = textLines.filter(l => (l.confidence || 0) < 0.5 && l.hasBbox);
-  console.log('Low confidence items WITH bbox (will be rendered):', lowWithBbox);
-  
   // Collect tables
   const pageTables = [];
   const seenTableIds = new Set();
@@ -1155,11 +1143,6 @@ function renderSpatialTextOverlay(pageData, container) {
   
   // Get all text lines with bbox for display (don't filter by table overlap anymore)
   const filteredTextLines = textLines.filter(line => line.hasBbox);
-  
-  // Debug: Show what will be rendered
-  console.log('Filtered text lines count:', filteredTextLines.length);
-  console.log('Low conf in filtered:', filteredTextLines.filter(l => l.confidence < 0.5));
-  console.log('Scale and dimensions:', { pageWidth, pageHeight, displayWidth, displayHeight, scale });
   
   if (textLines.length === 0 && pageTables.length === 0) {
     container.innerHTML = '<div class="spatial-no-data"><div class="icon">📝</div><p>No OCR content available</p></div>';

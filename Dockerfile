@@ -27,6 +27,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # Build essentials for some Python packages
     gcc \
     g++ \
+    # Health check
+    curl \
     # Privilege drop in entrypoint
     gosu \
     && rm -rf /var/lib/apt/lists/* \
@@ -81,7 +83,7 @@ EXPOSE 8080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:8080/health').raise_for_status()" || exit 1
+    CMD curl -f http://localhost:8080/health || exit 1
 
 # Entrypoint resolves Azure DNS via DoH then drops to docvision user
 ENTRYPOINT ["docker-entrypoint.sh"]

@@ -66,6 +66,21 @@ models/
 *.log
 logs/
 
+# Tests & scripts
+tests/
+scripts/
+
+# Samples & generated markdown
+samples/
+markdown/
+.cache/
+
+# Documentation (not needed in image)
+README.md
+DOCUMENTATION.md
+JSON_SCHEMA.md
+LICENSE
+
 # OS files
 .DS_Store
 Thumbs.db
