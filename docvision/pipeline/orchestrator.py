@@ -18,7 +18,7 @@ import os
 import time
 import uuid
 from pathlib import Path
-from typing import Optional, List, Union, Dict, Any
+from typing import Optional, List, Union, Dict, Any, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -59,6 +59,9 @@ class ProcessingOptions:
     save_artifacts: bool = True
     save_json: bool = True
     output_dir: Optional[str] = None
+
+    # Progress callback: called with (stage: str, percent: int)
+    progress_callback: Optional[Callable[[str, int], None]] = None
 
 
 class DocumentProcessor:
@@ -403,7 +406,8 @@ class DocumentProcessor:
         doc_id = str(uuid.uuid4())[:8]
         
         logger.info(f"Processing document: {input_path} (ID: {doc_id})")
-        
+        _cb = options.progress_callback or (lambda stage, pct: None)
+
         try:
             # Determine file type and load
             path = Path(input_path)
@@ -416,6 +420,7 @@ class DocumentProcessor:
                     error=f"File not found: {input_path}"
                 )
             
+            _cb("Loading document", 5)
             file_type = self._get_file_type(path)
             
             if file_type == "pdf":
@@ -438,6 +443,7 @@ class DocumentProcessor:
                 self.artifact_manager.current_mode = options.processing_mode
 
             # ── Smart classification (Azure mode only) ───────────────
+            _cb("Classifying document", 10)
             gpt_deployment_override = None
             if options.processing_mode == "azure" and page_images:
                 doc_type, gpt_deploy, di_model = self._classify_and_route(
@@ -464,6 +470,8 @@ class DocumentProcessor:
                 )
             
             for page_num, page_image in enumerate(page_images, start=1):
+                base_pct = 15 + int(70 * (page_num - 1) / max(len(page_images), 1))
+                _cb(f"Processing page {page_num}/{len(page_images)}", base_pct)
                 logger.info(f"Processing page {page_num}/{len(page_images)}")
                 
                 page_result = self._process_page(
@@ -480,10 +488,12 @@ class DocumentProcessor:
                 all_fields_lists.append(page_result["fields"])
             
             # Fuse fields from all sources
+            _cb("Fusing fields", 88)
             fused_fields = self.fuser.fuse_fields(all_fields_lists)
             
             # Run validators
             if options.run_validators:
+                _cb("Validating", 92)
                 fused_fields = self._run_validators(fused_fields)
             
             # Create document
@@ -514,6 +524,7 @@ class DocumentProcessor:
             if options.save_artifacts and self.config.artifacts.enable:
                 self.artifact_manager.generate_summary_html(document, file_label)
             
+            _cb("Complete", 100)
             logger.info(f"Document processed successfully in {processing_time:.2f}s")
             
             return ProcessingResult(
@@ -796,6 +807,8 @@ class DocumentProcessor:
             f"Azure batch mode: sending entire PDF ({len(page_images)} pages) "
             "in a single Document Intelligence call"
         )
+        _cb = options.progress_callback or (lambda stage, pct: None)
+        _cb("Sending to Azure Document Intelligence", 15)
 
         pdf_bytes = pdf_path.read_bytes()
         artifact_label = file_label or pdf_path.stem
@@ -819,6 +832,8 @@ class DocumentProcessor:
         for page_num, (page_data, page_image) in enumerate(
             zip(per_page_results, page_images), start=1
         ):
+            base_pct = 30 + int(50 * (page_num - 1) / max(len(page_images), 1))
+            _cb(f"Processing page {page_num}/{len(page_images)}", base_pct)
             logger.info(f"Processing page {page_num}/{len(page_images)} (batch)")
 
             h, w = page_image.shape[:2]
@@ -910,10 +925,12 @@ class DocumentProcessor:
             all_fields_lists.append(fields)
 
         # Fuse fields from all sources
+        _cb("Fusing fields", 85)
         fused_fields = self.fuser.fuse_fields(all_fields_lists)
 
         # Run validators
         if options.run_validators:
+            _cb("Validating", 90)
             fused_fields = self._run_validators(fused_fields)
 
         processing_time = time.time() - start_time
@@ -943,6 +960,7 @@ class DocumentProcessor:
         if options.save_artifacts and self.config.artifacts.enable:
             self.artifact_manager.generate_summary_html(document, artifact_label)
 
+        _cb("Complete", 100)
         logger.info(
             f"Batch document processed successfully in {processing_time:.2f}s "
             f"({len(pages)} pages)"

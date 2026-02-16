@@ -43,6 +43,38 @@ _jobs: Dict[str, Dict[str, Any]] = {}
 _jobs_lock = threading.Lock()           # protects _jobs dict mutations
 _local_model_lock = threading.Lock()    # serialises local-model inference
 
+# Job eviction settings
+_JOB_MAX_AGE_SECS = 3600      # evict completed/failed jobs older than 1 hour
+_JOB_MAX_COUNT = 200           # hard cap on total in-memory jobs
+
+
+def _evict_old_jobs() -> None:
+    """Remove stale completed/failed jobs to prevent unbounded memory growth."""
+    now = time.time()
+    with _jobs_lock:
+        # Phase 1: remove completed/failed jobs older than max age
+        stale = [
+            jid for jid, j in _jobs.items()
+            if j["status"] in ("completed", "failed")
+            and (now - j.get("_created_ts", now)) > _JOB_MAX_AGE_SECS
+        ]
+        for jid in stale:
+            del _jobs[jid]
+        if stale:
+            logger.debug(f"Evicted {len(stale)} stale jobs")
+
+        # Phase 2: if still over cap, drop oldest completed jobs
+        if len(_jobs) > _JOB_MAX_COUNT:
+            completed = sorted(
+                [(jid, j) for jid, j in _jobs.items() if j["status"] == "completed"],
+                key=lambda x: x[1].get("_created_ts", 0),
+            )
+            to_drop = len(_jobs) - _JOB_MAX_COUNT
+            for jid, _ in completed[:to_drop]:
+                del _jobs[jid]
+            if to_drop > 0:
+                logger.debug(f"Evicted {min(to_drop, len(completed))} jobs (over cap)")
+
 WEB_DIR = Path(__file__).parent
 STATIC_DIR = WEB_DIR / "static"
 UPLOAD_DIR = Path(tempfile.gettempdir()) / "docvision_uploads"
@@ -203,14 +235,18 @@ async def process_document(
     # Determine mode subfolder for artifacts
     mode_subfolder = "Azure_Cloud" if processing_mode == "azure" else "Local"
 
+    _evict_old_jobs()
+
     _jobs[job_id] = {
         "status": "processing",
         "filename": file.filename,
         "processing_mode": processing_mode,
         "created": datetime.now(ZoneInfo("America/New_York")).isoformat(),
+        "_created_ts": time.time(),
         "result": None,
         "error": None,
         "artifacts_dir": None,
+        "progress": {"stage": "Uploading", "percent": 0},
     }
 
     # Run synchronously in a thread so the event loop stays responsive
@@ -220,6 +256,9 @@ async def process_document(
     def _update_job(jid, **kwargs):
         with _jobs_lock:
             _jobs[jid].update(kwargs)
+
+    def _progress_cb(stage: str, percent: int):
+        _update_job(job_id, progress={"stage": stage, "percent": percent})
 
     async def _run():
         try:
@@ -236,6 +275,7 @@ async def process_document(
                 run_validators=run_validators,
                 save_artifacts=True,
                 save_json=False,
+                progress_callback=_progress_cb,
             )
 
             def _do_process():
@@ -311,14 +351,18 @@ async def process_batch(
 
         mode_subfolder = "Azure_Cloud" if processing_mode == "azure" else "Local"
 
+        _evict_old_jobs()
+
         _jobs[job_id] = {
             "status": "queued",
             "filename": file.filename,
             "processing_mode": processing_mode,
-"created": datetime.now(ZoneInfo("America/New_York")).isoformat(),
+            "created": datetime.now(ZoneInfo("America/New_York")).isoformat(),
+            "_created_ts": time.time(),
             "result": None,
             "error": None,
             "artifacts_dir": None,
+            "progress": {"stage": "Queued", "percent": 0},
         }
         job_ids.append(job_id)
 
@@ -335,6 +379,11 @@ async def process_batch(
             with _jobs_lock:
                 _jobs[jid].update(kwargs)
 
+        def _make_batch_progress_cb(jid):
+            def _cb(stage, percent):
+                _update_job_batch(jid, progress={"stage": stage, "percent": percent})
+            return _cb
+
         async def _run_batch(jid=_jid, upath=_upload_path, mode=_mode, dtype=_dtype, msub=_msub):
             _update_job_batch(jid, status="processing")
             try:
@@ -343,6 +392,7 @@ async def process_batch(
                     document_type=dtype,
                     save_artifacts=True,
                     save_json=False,
+                    progress_callback=_make_batch_progress_cb(jid),
                 )
 
                 def _do_process():
@@ -486,6 +536,7 @@ async def get_job(job_id: str):
         "created": job["created"],
         "error": job.get("error"),
         "has_result": job["result"] is not None,
+        "progress": job.get("progress"),
     }
 
 
