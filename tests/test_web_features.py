@@ -331,22 +331,22 @@ class TestFrontendHTML:
         assert 'id="fileInput"' in res.text
 
     def test_has_view_toggle_js(self, client):
-        res = client.get("/")
-        assert "switchView" in res.text
-        assert "outputView" in res.text
+        js = Path("docvision/web/static/app.js").read_text(encoding="utf-8")
+        assert "switchView" in js
+        assert "outputView" in js
 
     def test_has_confidence_css(self, client):
-        res = client.get("/")
-        assert "--conf-high" in res.text
-        assert "--conf-mid" in res.text
-        assert "--conf-low" in res.text
-        assert "conf-badge" in res.text
+        css = Path("docvision/web/static/style.css").read_text()
+        assert "--conf-high" in css
+        assert "--conf-mid" in css
+        assert "--conf-low" in css
+        assert "conf-badge" in css
 
     def test_has_field_editor_class(self, client):
-        res = client.get("/")
-        assert "field-card" in res.text
-        assert "field-grid" in res.text
-        assert "field-input" in res.text
+        css = Path("docvision/web/static/style.css").read_text()
+        assert "field-card" in css
+        assert "field-grid" in css
+        assert "field-input" in css
 
     def test_has_history_table(self, client):
         res = client.get("/")
@@ -355,13 +355,15 @@ class TestFrontendHTML:
 
     def test_has_preview_area(self, client):
         res = client.get("/")
+        js = Path("docvision/web/static/app.js").read_text(encoding="utf-8")
         assert "previewArea" in res.text
-        assert "generatePreview" in res.text
+        assert "generatePreview" in js
 
     def test_has_lightbox(self, client):
         res = client.get("/")
+        js = Path("docvision/web/static/app.js").read_text(encoding="utf-8")
         assert "lightbox" in res.text
-        assert "showLightbox" in res.text
+        assert "showLightbox" in js
 
 
 # ===========================================================================
@@ -439,7 +441,7 @@ class TestDockerFiles:
 
     def test_compose_azure_env_vars(self):
         content = Path("docker-compose.yml").read_text()
-        assert "AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT" in content
+        assert "AZURE_DOC_INTELLIGENCE_ENDPOINT" in content
         assert "AZURE_OPENAI_ENDPOINT" in content
 
     def test_compose_cache_volume(self):
