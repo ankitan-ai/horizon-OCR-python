@@ -98,6 +98,18 @@ async def lifespan(app: FastAPI):
     config = load_config(config_path) if config_path and Path(config_path).exists() else Config()
     # Enable artifacts so the viewer has images to show
     config.artifacts.enable = True
+
+    # Pre-resolve Azure hostnames via DNS-over-HTTPS (bypasses VPN private link issues)
+    if config.azure.processing_mode in ("azure", "hybrid") or config.azure.is_azure_ready:
+        try:
+            from docvision.dns_config import configure_doh_for_azure
+            configure_doh_for_azure(
+                di_endpoint=config.azure.doc_intelligence_endpoint,
+                openai_endpoint=config.azure.openai_endpoint,
+            )
+        except Exception as exc:
+            logger.warning(f"DoH DNS setup skipped: {exc}")
+
     _processor = DocumentProcessor(config)
     global _shared_pool
     _shared_pool = concurrent.futures.ThreadPoolExecutor(max_workers=4)

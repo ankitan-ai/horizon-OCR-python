@@ -121,6 +121,17 @@ def process(
     
     cfg.output.pretty_json = pretty
     
+    # Pre-resolve Azure hostnames via DoH (bypasses VPN private link DNS issues)
+    if cfg.azure.processing_mode in ("azure", "hybrid") or cfg.azure.is_azure_ready:
+        try:
+            from docvision.dns_config import configure_doh_for_azure
+            configure_doh_for_azure(
+                di_endpoint=cfg.azure.doc_intelligence_endpoint,
+                openai_endpoint=cfg.azure.openai_endpoint,
+            )
+        except Exception:
+            pass
+
     # Initialize processor
     from docvision.pipeline import DocumentProcessor, ProcessingOptions
     
