@@ -81,6 +81,7 @@ Thumbs.db
 # Secrets
 .env
 .env.*
+!.env.example
 secrets/
 *.key
 *.pem

@@ -37,7 +37,7 @@ It supports **three processing modes**: a fully local ML pipeline (8 models), Az
 ### Infrastructure
 - **REST API & CLI** — FastAPI server and Typer CLI for flexible integration
 - **Docker Ready** — CPU and GPU Dockerfiles with docker-compose profiles (dev, prod, gpu, batch)
-- **449 Tests** — Unit, integration, web feature, and Azure smoke tests
+- **462 Tests** — Unit, integration, web feature, and Azure smoke tests
 
 ---
 
@@ -67,6 +67,9 @@ pip install -r requirements.txt
 
 # Install package in development mode
 pip install -e .
+
+# Download ML models (~3 GB, required for local mode)
+python -m docvision.download_models
 
 # (Optional) Install Azure cloud extras
 pip install -e ".[azure]"
@@ -223,7 +226,7 @@ azure:
   doc_intelligence_key: ""
   openai_endpoint: ""
   openai_key: ""
-  openai_deployment: gpt-4o
+  openai_deployment: gpt-4o-mini
   use_gpt_vision_kie: true
 ```
 
@@ -383,7 +386,7 @@ Azure credentials are passed as environment variables in `docker-compose.yml` �
 ## Testing
 
 ```bash
-# Run all tests (449 tests)
+# Run all tests (462 tests)
 pytest
 
 # Run with coverage
