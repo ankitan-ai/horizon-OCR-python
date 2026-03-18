@@ -17,8 +17,11 @@ Usage::
 from __future__ import annotations
 
 import asyncio
+import json
+import os
 import time
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any, Dict, Optional, Tuple
 
 import httpx
@@ -28,6 +31,54 @@ from loguru import logger
 class PricingUnavailableError(Exception):
     """Raised when Azure pricing cannot be fetched from the API."""
     pass
+
+
+# ── API Response Logging ────────────────────────────────────────────────────
+PRICING_LOG_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "output", "pricing_logs")
+
+
+def _log_api_response(
+    service_description: str,
+    filter_query: str,
+    response_data: Dict[str, Any],
+    selected_price: Optional[float] = None,
+    selected_item: Optional[Dict[str, Any]] = None,
+) -> None:
+    """
+    Log the full API response to a file for debugging and auditing.
+    
+    Creates a JSON file in output/pricing_logs/ with:
+    - Timestamp
+    - Filter query used
+    - Full API response
+    - Which price was selected
+    """
+    try:
+        os.makedirs(PRICING_LOG_DIR, exist_ok=True)
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        safe_desc = service_description.replace(" ", "_").replace("(", "").replace(")", "")
+        filename = f"{timestamp}_{safe_desc}.json"
+        filepath = os.path.join(PRICING_LOG_DIR, filename)
+        
+        log_entry = {
+            "timestamp": datetime.now().isoformat(),
+            "service_description": service_description,
+            "filter_query": filter_query,
+            "api_url": AZURE_PRICES_API_URL,
+            "total_items_returned": len(response_data.get("Items", [])),
+            "selected_price": selected_price,
+            "selected_item": selected_item,
+            "full_response": response_data,
+        }
+        
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(log_entry, f, indent=2, default=str)
+        
+        logger.info(f"Pricing API response logged to: {filepath}")
+        
+    except Exception as e:
+        logger.warning(f"Failed to log pricing API response: {e}")
 
 
 # ── Azure Retail Prices API configuration ───────────────────────────────────
@@ -168,16 +219,28 @@ class AzurePricingService:
                 
                 items = data.get("Items", [])
                 if not items:
+                    # Log empty response
+                    _log_api_response(
+                        service_description, filter_query, data,
+                        selected_price=None, selected_item=None
+                    )
                     raise PricingUnavailableError(
                         f"No pricing found for {service_description}. "
                         f"Filter: {filter_query}"
                     )
                 
                 # Find the retail price (prefer Consumption type)
+                selected_item = None
                 for item in items:
                     if item.get("type") == "Consumption":
                         price = item.get("unitPrice") or item.get("retailPrice")
                         if price is not None:
+                            selected_item = item
+                            # Log successful response
+                            _log_api_response(
+                                service_description, filter_query, data,
+                                selected_price=price, selected_item=item
+                            )
                             logger.debug(
                                 f"Found {service_description} pricing: "
                                 f"${price:.8f} ({item.get('meterName')})"
@@ -187,6 +250,11 @@ class AzurePricingService:
                 # Use first item if no Consumption type found
                 price = items[0].get("unitPrice") or items[0].get("retailPrice")
                 if price is not None:
+                    # Log fallback selection
+                    _log_api_response(
+                        service_description, filter_query, data,
+                        selected_price=price, selected_item=items[0]
+                    )
                     return price
                 
                 raise PricingUnavailableError(
@@ -244,6 +312,11 @@ class AzurePricingService:
                 
                 items = data.get("Items", [])
                 if not items:
+                    # Log empty response
+                    _log_api_response(
+                        service_description, filter_query, data,
+                        selected_price=None, selected_item=None
+                    )
                     raise PricingUnavailableError(
                         f"No pricing found for {service_description}. "
                         f"Filter: {filter_query}"
@@ -274,6 +347,11 @@ class AzurePricingService:
                     filtered = [i for i in items if i.get("type") == "Consumption"]
                 
                 if not filtered:
+                    # Log no valid pricing
+                    _log_api_response(
+                        service_description, filter_query, data,
+                        selected_price=None, selected_item=None
+                    )
                     raise PricingUnavailableError(
                         f"No standard pricing found for {service_description}"
                     )
@@ -283,6 +361,11 @@ class AzurePricingService:
                     meter = item.get("meterName", "").lower()
                     if "regnl" in meter or "regional" in meter:
                         price = item.get("unitPrice") or item.get("retailPrice")
+                        # Log regional pricing selection
+                        _log_api_response(
+                            service_description, filter_query, data,
+                            selected_price=price, selected_item=item
+                        )
                         logger.debug(
                             f"Found {service_description} regional pricing: "
                             f"${price:.8f} ({item.get('meterName')})"
@@ -291,6 +374,11 @@ class AzurePricingService:
                 
                 # Use first filtered item
                 price = filtered[0].get("unitPrice") or filtered[0].get("retailPrice")
+                # Log fallback selection
+                _log_api_response(
+                    service_description, filter_query, data,
+                    selected_price=price, selected_item=filtered[0]
+                )
                 logger.debug(
                     f"Found {service_description} pricing: "
                     f"${price:.8f} ({filtered[0].get('meterName')})"
