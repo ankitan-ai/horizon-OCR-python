@@ -563,6 +563,17 @@ async def list_history():
     return {"jobs": jobs_list, "total": len(jobs_list)}
 
 
+@app.delete("/api/history")
+async def clear_history():
+    """Clear all job history."""
+    global _jobs
+    with _jobs_lock:
+        count = len(_jobs)
+        _jobs.clear()
+    logger.info(f"Cleared {count} jobs from history")
+    return {"ok": True, "cleared": count}
+
+
 # ---------------------------------------------------------------------------
 # API: job status / result
 # ---------------------------------------------------------------------------

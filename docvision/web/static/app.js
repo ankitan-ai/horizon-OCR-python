@@ -1606,6 +1606,17 @@ async function loadHistory() {
   } catch (e) { console.warn('History load error:', e); }
 }
 
+async function clearHistory() {
+  if (!confirm('Clear all processing history? This cannot be undone.')) return;
+  try {
+    const res = await fetch('/api/history', { method: 'DELETE' });
+    if (!res.ok) throw new Error('Failed to clear history');
+    const data = await res.json();
+    loadHistory();
+    alert(`Cleared ${data.cleared} job(s) from history.`);
+  } catch (e) { alert('Error clearing history: ' + e.message); }
+}
+
 function renderHistory(jobs) {
   const tbody = $('#historyTableBody');
   if (!jobs?.length) {

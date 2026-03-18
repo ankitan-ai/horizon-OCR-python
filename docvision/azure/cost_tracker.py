@@ -29,37 +29,11 @@ from typing import Any, Dict, List, Optional
 
 from loguru import logger
 
-
-# ── Pricing estimates (USD) ─────────────────────────────────────────────────
-# Prices as of early-2026; update when Azure changes pricing.
-# Document Intelligence: per page analysed
-DI_COST_PER_PAGE: Dict[str, float] = {
-    "prebuilt-layout": 0.01,
-    "prebuilt-read": 0.01,
-    "prebuilt-invoice": 0.01,
-    "prebuilt-receipt": 0.01,
-    "prebuilt-document": 0.01,
-    "default": 0.01,
-}
-
-# Azure OpenAI: per 1K tokens (input / output)
-GPT_COST_PER_1K_INPUT: Dict[str, float] = {
-    "gpt-4o-mini": 0.00015,
-    "gpt-4.1-mini": 0.0004,
-    "gpt-5-nano": 0.0001,
-    "gpt-5-mini": 0.0003,
-    "gpt-5.2": 0.0025,
-    "default": 0.0005,
-}
-
-GPT_COST_PER_1K_OUTPUT: Dict[str, float] = {
-    "gpt-4o-mini": 0.0006,
-    "gpt-4.1-mini": 0.0016,
-    "gpt-5-nano": 0.0004,
-    "gpt-5-mini": 0.0012,
-    "gpt-5.2": 0.01,
-    "default": 0.002,
-}
+from docvision.azure.pricing_service import (
+    get_pricing_service,
+    AzurePricingService,
+    PricingUnavailableError,
+)
 
 
 @dataclass
@@ -81,17 +55,44 @@ class APICallRecord:
 @dataclass
 class CostTracker:
     """
-    Accumulates Azure API call records and computes cost estimates.
+    Accumulates Azure API call records and computes ACTUAL costs.
 
     Completely in-memory; call :meth:`summary` or :meth:`to_dict` to
     serialise.  Thread-safe via a reentrant lock.
+    
+    Pricing is fetched LIVE from Azure Retail Prices API.
+    NO FALLBACKS - raises PricingUnavailableError if API is unreachable.
     """
 
     records: List[APICallRecord] = field(default_factory=list)
     _lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
     max_records: int = 5000  # FIFO eviction to prevent unbounded growth
+    _pricing_service: Optional[AzurePricingService] = field(default=None, repr=False)
+
+    def __post_init__(self) -> None:
+        """Initialize the pricing service."""
+        if self._pricing_service is None:
+            self._pricing_service = get_pricing_service()
 
     # ── recording ────────────────────────────────────────────────────────
+
+    def _get_di_cost(self, model: str) -> float:
+        """
+        Get DI cost per page from Azure Retail Prices API.
+        
+        Raises:
+            PricingUnavailableError: If pricing cannot be fetched
+        """
+        return self._pricing_service.get_di_cost_per_page_sync(model)
+
+    def _get_gpt_costs(self, deployment: str) -> tuple[float, float]:
+        """
+        Get GPT costs per 1K tokens from Azure Retail Prices API.
+        
+        Raises:
+            PricingUnavailableError: If pricing cannot be fetched
+        """
+        return self._pricing_service.get_gpt_costs_sync(deployment)
 
     def record_di_call(
         self,
@@ -101,11 +102,18 @@ class CostTracker:
         doc_id: str = "",
         cached: bool = False,
     ) -> APICallRecord:
-        """Record an Azure Document Intelligence API call."""
+        """
+        Record an Azure Document Intelligence API call.
+        
+        Pricing is fetched LIVE from Azure Retail Prices API.
+        
+        Raises:
+            PricingUnavailableError: If pricing cannot be fetched from API
+        """
         if cached:
             cost = 0.0
         else:
-            per_page = DI_COST_PER_PAGE.get(model, DI_COST_PER_PAGE["default"])
+            per_page = self._get_di_cost(model)
             cost = pages * per_page
 
         record = APICallRecord(
@@ -146,16 +154,18 @@ class CostTracker:
         doc_id: str = "",
         cached: bool = False,
     ) -> APICallRecord:
-        """Record an Azure OpenAI GPT Vision API call."""
+        """
+        Record an Azure OpenAI GPT Vision API call.
+        
+        Pricing is fetched LIVE from Azure Retail Prices API.
+        
+        Raises:
+            PricingUnavailableError: If pricing cannot be fetched from API
+        """
         if cached:
             cost = 0.0
         else:
-            input_rate = GPT_COST_PER_1K_INPUT.get(
-                deployment, GPT_COST_PER_1K_INPUT["default"]
-            )
-            output_rate = GPT_COST_PER_1K_OUTPUT.get(
-                deployment, GPT_COST_PER_1K_OUTPUT["default"]
-            )
+            input_rate, output_rate = self._get_gpt_costs(deployment)
             cost = (prompt_tokens / 1000) * input_rate + (
                 completion_tokens / 1000
             ) * output_rate
@@ -241,15 +251,10 @@ class CostTracker:
                 if not r.cached:
                     continue
                 if r.service == "doc_intelligence":
-                    per_page = DI_COST_PER_PAGE.get(r.model, DI_COST_PER_PAGE["default"])
+                    per_page = self._get_di_cost(r.model)
                     total += r.pages * per_page
                 elif r.service == "gpt_vision":
-                    input_rate = GPT_COST_PER_1K_INPUT.get(
-                        r.model, GPT_COST_PER_1K_INPUT["default"]
-                    )
-                    output_rate = GPT_COST_PER_1K_OUTPUT.get(
-                        r.model, GPT_COST_PER_1K_OUTPUT["default"]
-                    )
+                    input_rate, output_rate = self._get_gpt_costs(r.model)
                     total += (r.prompt_tokens / 1000) * input_rate + (
                         r.completion_tokens / 1000
                     ) * output_rate
@@ -296,11 +301,10 @@ class CostTracker:
             if not r.cached:
                 continue
             if r.service == "doc_intelligence":
-                per_page = DI_COST_PER_PAGE.get(r.model, DI_COST_PER_PAGE["default"])
+                per_page = self._get_di_cost(r.model)
                 saved += r.pages * per_page
             elif r.service == "gpt_vision":
-                input_rate = GPT_COST_PER_1K_INPUT.get(r.model, GPT_COST_PER_1K_INPUT["default"])
-                output_rate = GPT_COST_PER_1K_OUTPUT.get(r.model, GPT_COST_PER_1K_OUTPUT["default"])
+                input_rate, output_rate = self._get_gpt_costs(r.model)
                 saved += (r.prompt_tokens / 1000) * input_rate + (r.completion_tokens / 1000) * output_rate
         
         return {
