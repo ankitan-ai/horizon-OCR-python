@@ -24,6 +24,8 @@ services:
       - AZURE_DOC_INTELLIGENCE_KEY=${AZURE_DOC_INTELLIGENCE_KEY:-}
       - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT:-}
       - AZURE_OPENAI_KEY=${AZURE_OPENAI_KEY:-}
+      - AZURE_PRICING_REGION=${AZURE_PRICING_REGION:-eastus}
+      - AZURE_PRICING_VERIFY_SSL=${AZURE_PRICING_VERIFY_SSL:-true}
     command: >
       python -m uvicorn docvision.web.app:app 
       --host 0.0.0.0 
@@ -57,6 +59,8 @@ services:
       - AZURE_DOC_INTELLIGENCE_KEY=${AZURE_DOC_INTELLIGENCE_KEY:-}
       - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT:-}
       - AZURE_OPENAI_KEY=${AZURE_OPENAI_KEY:-}
+      - AZURE_PRICING_REGION=${AZURE_PRICING_REGION:-eastus}
+      - AZURE_PRICING_VERIFY_SSL=${AZURE_PRICING_VERIFY_SSL:-true}
     restart: unless-stopped
     deploy:
       resources:
@@ -99,6 +103,8 @@ services:
       - AZURE_DOC_INTELLIGENCE_KEY=${AZURE_DOC_INTELLIGENCE_KEY:-}
       - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT:-}
       - AZURE_OPENAI_KEY=${AZURE_OPENAI_KEY:-}
+      - AZURE_PRICING_REGION=${AZURE_PRICING_REGION:-eastus}
+      - AZURE_PRICING_VERIFY_SSL=${AZURE_PRICING_VERIFY_SSL:-true}
     restart: unless-stopped
     deploy:
       resources:
@@ -131,6 +137,8 @@ services:
       - AZURE_DOC_INTELLIGENCE_KEY=${AZURE_DOC_INTELLIGENCE_KEY:-}
       - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT:-}
       - AZURE_OPENAI_KEY=${AZURE_OPENAI_KEY:-}
+      - AZURE_PRICING_REGION=${AZURE_PRICING_REGION:-eastus}
+      - AZURE_PRICING_VERIFY_SSL=${AZURE_PRICING_VERIFY_SSL:-true}
     command: >
       docvision batch /app/data 
       --output /app/output 
